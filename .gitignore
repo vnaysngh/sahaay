@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.m0-private/
+shot1.mp3
+shot2.mp3
+__pycache__/
+
+node_modules/
+.next/
+*.tsbuildinfo
+.local/
+playwright-report/
+test-results/
+coverage/
+
+.next-test/
