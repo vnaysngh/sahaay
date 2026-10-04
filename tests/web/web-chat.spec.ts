@@ -1,4 +1,12 @@
+import { imageFixture, audioFixture } from "../fixtures";
 import { test, expect } from "@playwright/test";
+test.beforeEach(async ({ context }) => {
+  // Keep independent test accounts from sharing the authentication IP budget.
+  const bytes = crypto.getRandomValues(new Uint8Array(2));
+  await context.setExtraHTTPHeaders({
+    "x-forwarded-for": `127.1.${bytes[0]}.${bytes[1]}`,
+  });
+});
 async function signup(page: import("@playwright/test").Page) {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Create an account" }).click();
@@ -83,5 +91,130 @@ test("mobile conversation window fits without a dashboard", async ({
   await page.getByRole("button", { name: "Open conversations" }).click();
   await expect(
     page.getByRole("button", { name: "New conversation" }),
+  ).toBeVisible();
+});
+
+test("image upload, follow-up, history and denied foreign access", async ({
+  page,
+  browser,
+}) => {
+  await signup(page);
+  await page.getByLabel("Upload images or audio").setInputFiles({
+    name: "test.png",
+    mimeType: "image/png",
+    buffer: await imageFixture(),
+  });
+  await expect(page.locator(".pending-attachments img")).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Message Sahaay" })
+    .fill("Explain this image.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(
+    page.getByText("The test image contains a blue rectangle."),
+  ).toBeVisible();
+  const url = await page
+    .locator(".message-attachments img")
+    .getAttribute("src");
+  expect(url).toBeTruthy();
+  const outsider = await browser.newContext();
+  const denied = await outsider.request.get(`http://localhost:3100${url}`);
+  expect(denied.status()).toBe(401);
+  await outsider.close();
+  await page
+    .getByRole("textbox", { name: "Message Sahaay" })
+    .fill("What color was it?");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(
+    page.getByText("The test image contains a blue rectangle."),
+  ).toHaveCount(2);
+  await page.reload();
+  await page
+    .getByRole("navigation", { name: "Conversation history" })
+    .getByRole("button")
+    .first()
+    .click();
+  await expect(page.locator(".message-attachments img")).toBeVisible();
+});
+test("voice upload uses the common agent and exposes the transcript", async ({
+  page,
+}) => {
+  await signup(page);
+  await page.getByLabel("Upload images or audio").setInputFiles({
+    name: "voice.wav",
+    mimeType: "audio/wav",
+    buffer: audioFixture(),
+  });
+  await expect(page.locator(".pending-attachments audio")).toBeVisible();
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(
+    page.getByText("I understood your voice message, Kavya."),
+  ).toBeVisible();
+  await page.getByText("Transcript · en-IN").click();
+  await expect(
+    page.getByText("This is a test voice message. My name is Kavya."),
+  ).toBeVisible();
+});
+test("microphone recording can be cancelled and completed without using a real device", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["microphone"]);
+  await page.addInitScript(() => {
+    // Generate local sound; never acquire a real microphone in automation.
+    navigator.mediaDevices.getUserMedia = async () => {
+      const audio = new AudioContext();
+      const destination = audio.createMediaStreamDestination();
+      const oscillator = audio.createOscillator();
+      oscillator.connect(destination);
+      oscillator.start();
+      await audio.resume();
+      return destination.stream;
+    };
+  });
+  await signup(page);
+  await page.getByRole("button", { name: "Record voice", exact: true }).click();
+  await expect(page.getByText(/Recording \d+s/)).toBeVisible();
+  await page
+    .getByRole("button", { name: "Cancel recording", exact: true })
+    .click();
+  await expect(page.locator(".pending-attachments")).toHaveCount(0);
+  await page.getByRole("button", { name: "Record voice", exact: true }).click();
+  await expect(page.getByText("Recording 1s")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop recording", exact: true })
+    .click();
+  await expect(page.locator(".pending-attachments audio")).toBeVisible();
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(
+    page.getByText("I understood your voice message, Kavya."),
+  ).toBeVisible();
+});
+test("unsupported uploads and microphone denial have clear fallbacks", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: {
+        getUserMedia: () =>
+          Promise.reject(new DOMException("Denied", "NotAllowedError")),
+      },
+    });
+  });
+  await signup(page);
+  await page.getByRole("button", { name: "Record voice", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Microphone access was denied or unavailable. You can upload audio with +.",
+    ),
+  ).toBeVisible();
+  await page.getByLabel("Upload images or audio").setInputFiles({
+    name: "test.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.7"),
+  });
+  await expect(
+    page.getByText(
+      "Documents/PDFs are not supported yet. Send a screenshot instead.",
+    ),
   ).toBeVisible();
 });

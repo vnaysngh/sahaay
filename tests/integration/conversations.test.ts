@@ -1,5 +1,10 @@
 import "../../scripts/env";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, rm, access, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Attachments } from "../../apps/web/src/media/attachments";
+import { MediaFiles } from "../../apps/web/src/media/files";
+import { imageFixture } from "../fixtures";
 import { Pool } from "pg";
 import { describe, it, beforeAll, afterAll, expect } from "vitest";
 import { PostgresConversations } from "../../apps/web/src/db/conversations";
@@ -18,6 +23,9 @@ beforeAll(async () => {
   });
   await pool.query(
     await readFile("apps/web/migrations/0001_web_chat.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0002_attachments.sql", "utf8"),
   );
   await pool.query(
     `INSERT INTO "user" (id,name,email) VALUES ('alice','Alice','alice@test.invalid'),('bob','Bob','bob@test.invalid')`,
@@ -101,7 +109,7 @@ describe("PostgreSQL ownership and request lifecycle", () => {
     });
     if (first.duplicate) throw new Error("unexpected");
     await pool.query(
-      "UPDATE messages SET created_at=now()-interval '151 seconds' WHERE id=$1",
+      "UPDATE messages SET created_at=now()-interval '211 seconds' WHERE id=$1",
       [first.request.messageId],
     );
     const next = await db.begin("bob", {
@@ -155,5 +163,73 @@ describe("PostgreSQL ownership and request lifecycle", () => {
       }),
     ).rejects.toMatchObject({ status: 429, code: "quota" });
     expect(await db.history("limited", other.id)).toHaveLength(0);
+  });
+  it("claims owned uploads once, hides foreign files and denies expired content", async () => {
+    const root = await mkdtemp(join(tmpdir(), "sahaay-owned-media-"));
+    const files = new MediaFiles(root);
+    const media = new Attachments(pool, files);
+    try {
+      const image = await media.upload("bob", await imageFixture(), "test.png");
+      await expect(media.read("alice", image.id)).rejects.toMatchObject({
+        status: 404,
+      });
+      await expect(media.remove("alice", image.id)).rejects.toMatchObject({
+        status: 404,
+      });
+      const conversation = await db.create("bob");
+      const input = {
+        conversationId: conversation.id,
+        requestId: crypto.randomUUID(),
+        text: "What is this?",
+        attachmentIds: [image.id],
+      };
+      await expect(
+        db.begin("alice", {
+          ...input,
+          conversationId: (await db.create("alice")).id,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+      const run = await db.begin("bob", input);
+      if (run.duplicate) throw new Error("unexpected duplicate");
+      expect(
+        (await db.context("bob", conversation.id, run.request.messageId))[0]
+          .attachments?.[0].id,
+      ).toBe(image.id);
+      expect(
+        (await db.history("bob", conversation.id))[0].attachments?.[0]
+          .available,
+      ).toBe(true);
+      expect((await db.begin("bob", input)).duplicate).toBe(true);
+      await expect(
+        db.begin("bob", { ...input, attachmentIds: [] }),
+      ).rejects.toMatchObject({ status: 409 });
+      await media.saveTranscript("alice", image.id, {
+        text: "not allowed",
+        metadata: {
+          provider: "test",
+          model: "test",
+          detectedLanguage: null,
+          languageProbability: null,
+          codeSwitching: null,
+        },
+      });
+      expect((await media.get("bob", image.id)).transcript).toBeNull();
+      await pool.query(
+        "UPDATE attachments SET expires_at=now()-interval '1 second' WHERE id=$1",
+        [image.id],
+      );
+      await expect(media.read("bob", image.id)).rejects.toMatchObject({
+        status: 410,
+      });
+      await media.cleanup();
+      await expect(access(files.path(image.id))).rejects.toThrow();
+      expect(
+        (await db.history("bob", conversation.id))[0].attachments?.[0]
+          .available,
+      ).toBe(false);
+      await db.fail(run.request, "test_done");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

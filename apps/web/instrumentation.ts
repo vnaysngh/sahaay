@@ -7,20 +7,21 @@ export async function register() {
   const { getPool } = await import("./src/db");
   const { PostgresConversations } = await import("./src/db/conversations");
   const store = new PostgresConversations(getPool());
+  const { Attachments } = await import("./src/media/attachments");
+  const media = new Attachments(getPool());
   await store.cleanup();
+  await media.cleanup();
   const globals = globalThis as typeof globalThis & {
     sahaayCleanup?: NodeJS.Timeout;
   };
   if (!globals.sahaayCleanup) {
     // Operational retention cleanup, not a product workflow or a separate service.
-    globals.sahaayCleanup = setInterval(
-      () => {
-        void store
-          .cleanup()
-          .catch(() => console.error("Retention cleanup unavailable"));
-      },
-      60 * 60 * 1000,
-    );
+    globals.sahaayCleanup = setInterval(() => {
+      void store
+        .cleanup()
+        .then(() => media.cleanup())
+        .catch(() => console.error("Retention cleanup unavailable"));
+    }, 60 * 1000);
     globals.sahaayCleanup.unref();
   }
 }

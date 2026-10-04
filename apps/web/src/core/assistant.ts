@@ -3,20 +3,38 @@ import type {
   ConversationStore,
   ResponseEvent,
   UnifiedRequest,
+  InputNormalizer,
 } from "./contracts";
 export async function* respond(
   request: UnifiedRequest,
   store: ConversationStore,
   provider: AgentProvider,
+  normalize?: InputNormalizer,
 ): AsyncGenerator<ResponseEvent> {
-  yield { type: "processing", messageId: request.messageId, stage: "thinking" };
+  yield {
+    type: "processing",
+    messageId: request.messageId,
+    stage: request.inputs.some((i) => i.type === "audio")
+      ? "transcribing"
+      : request.inputs.some((i) => i.type === "image")
+        ? "understanding"
+        : "thinking",
+  };
   try {
-    const context = await store.context(
+    let context = await store.context(
       request.userId,
       request.conversationId,
       request.messageId,
     );
-    const signal = AbortSignal.timeout(120_000);
+    const signal = AbortSignal.timeout(180_000);
+    if (normalize) {
+      context = await normalize(context, request.userId, signal);
+      yield {
+        type: "processing",
+        messageId: request.messageId,
+        stage: "thinking",
+      };
+    }
     let text = "";
     for await (const delta of provider.stream(context, {
       signal,

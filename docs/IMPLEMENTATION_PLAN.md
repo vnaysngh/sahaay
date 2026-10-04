@@ -1,6 +1,6 @@
 # Sahaay MVP Implementation Plan
 
-**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. Revised plan approved by “go ahead, start working”; M1 implementation authorized on 2026-10-04.
+**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 authorized by “awesome, go ahead” on 2026-10-04 and implemented locally.
 
 ## NEEDED FOR MVP — scope and architecture
 
@@ -8,7 +8,7 @@ Ask · Understand · Research · Remember · Organize.
 
 Web Chat → channel/input adapter → Unified Sahaay Request → one Sahaay agent → tools/memory → channel-independent response → web stream/rendering.
 
-P0: text, images/screenshots, voice recordings/uploads and URLs in normal messages. P1 PDFs/documents/location are not launch blockers. English/Hindi/Hinglish share one pipeline; explicit language instruction overrides configured preference, then follow the current input language naturally. Genuine Hinglish evaluation is deferred to M2, not removed from launch acceptance.
+P0: text, images/screenshots, voice recordings/uploads and URLs in normal messages. P1 PDFs/documents/location are not launch blockers. English/Hindi/Hinglish share one pipeline; explicit language instruction overrides configured preference, then follow the current input language naturally. Genuine Hinglish voice evaluation remains deferred at the user’s request; do not claim it has passed.
 
 Keep Next.js 16, TypeScript, Node.js, PostgreSQL, Drizzle/pg, Better Auth, one OpenAI Agents SDK agent with Responses, OpenAI vision/search, Sarvam as the pilot-selected transcription default, and Sahaay-owned SQL memory/items. Pin compatible patches during M1. Use small modules inside one app; split packages only when useful. No dashboard, extra providers, agent framework or additional services.
 
@@ -16,7 +16,7 @@ Meta Cloud API work and existing probes are paused and preserved. Account restri
 
 ## Verification conventions
 
-Application paths, tests and npm scripts below are planned and do not exist yet. Each milestone creates the scripts/suites it uses; test commands must fail for missing suites. Provider mocks verify application behavior; separately authorized live checks establish provider behavior. Never load real credentials in normal unit tests or log them. Common checks after each implementation milestone: `npm run lint`, `npm run typecheck`, `npm run build`.
+M1/M2 paths and verification scripts now exist; later milestone paths remain planned. Each milestone creates the scripts/suites it uses; test commands must fail for missing suites. Provider mocks verify application behavior; separately authorized live checks establish provider behavior. Never load real credentials in normal unit tests or log them. Common checks after each implementation milestone: `npm run lint`, `npm run typecheck`, `npm run build`.
 
 M1 introduces `npm ci`, `npm run dev`, `npm run db:migrate`, `npm run db:migrate:check`, `npm test` (Vitest) and `npm run test:web` (Playwright). PostgreSQL is the only datastore: use one available local installation or a development managed database selected in M0. Docker is optional, not a blocker if another PostgreSQL connection is available. Deployment provisioning is not required for local M1 acceptance.
 
@@ -72,7 +72,9 @@ M1 introduces `npm ci`, `npm run dev`, `npm run db:migrate`, `npm run db:migrate
 
 **Acceptance criteria:** Working `+`/microphone controls, useful image/voice responses and follow-ups, one agent/policy/context path for every modality. Available transcription metadata retained without invented confidence or language evidence. P1 document/location formats rejected clearly; no separate OCR/voice agent or speech response feature.
 
-**Commands required to verify:** `npm run db:migrate`; `npm test -- tests/multimodal`; `npm run test:web -- multimodal`; `npm run eval:multimodal`; `npm run test:provider -- --suite multimodal`; common checks.
+**Local implementation:** PNG/JPEG/WebP uploads and screenshot paste; voice recording/cancel/upload; private owner-scoped media; one normalized agent pipeline; image follow-ups and retained transcription metadata. Uploads are limited to 8 MB, 3 images and 1 voice clip per request; audio is limited to 30 seconds. FFmpeg/ffprobe are local runtime dependencies, not additional services. Media expires after 24 hours; transcripts follow the 7-day conversation retention. Browser recording stops slightly before the duration limit. English/Hindi consented live checks passed; genuine Hinglish, noisy speech and broader entity accuracy remain unvalidated. Production email/recovery and privacy launch gates still apply.
+
+**Commands required to verify:** `npm run db:migrate`; `npm test`; `npm run test:integration`; `npm run test:web`; common checks. Opt-in live provider check: `npm run test:live-multimodal` (requires existing keys and the consented local voice fixtures; sends data to OpenAI/Sarvam and deletes its disposable account/uploads).
 
 ## M3 — Research and URLs
 

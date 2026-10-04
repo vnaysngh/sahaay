@@ -1,5 +1,9 @@
 import type { Pool, PoolClient } from "pg";
-import type { ConversationStore, UnifiedRequest } from "../core/contracts";
+import type {
+  ConversationStore,
+  UnifiedRequest,
+  ConversationMessage,
+} from "../core/contracts";
 import { RequestError } from "../core/validation";
 export type StoredMessage = {
   id: string;
@@ -8,6 +12,7 @@ export type StoredMessage = {
   status: string;
   requestId: string;
   createdAt: string;
+  attachments?: import("../media/attachments").Attachment[];
 };
 export class PostgresConversations implements ConversationStore {
   constructor(private pool: Pool) {}
@@ -22,7 +27,7 @@ export class PostgresConversations implements ConversationStore {
       "UPDATE conversations c SET title=COALESCE((SELECT left(content,70) FROM messages m WHERE m.conversation_id=c.id AND m.role='user' ORDER BY m.created_at LIMIT 1),'New conversation') WHERE c.created_at < now()-interval '7 days'",
     );
     await this.pool.query(
-      "UPDATE messages SET status='interrupted', error_code='interrupted', completed_at=now() WHERE status='running' AND created_at < now() - interval '150 seconds'",
+      "UPDATE messages SET status='interrupted', error_code='interrupted', completed_at=now() WHERE status='running' AND created_at < now() - interval '210 seconds'",
     );
   }
   async list(userId: string) {
@@ -50,16 +55,33 @@ export class PostgresConversations implements ConversationStore {
     );
     if (!owned.rowCount)
       throw new RequestError(404, "not_found", "Conversation not found.");
-    return (
+    const rows = (
       await this.pool.query(
         `SELECT id, role, content, status, request_id AS "requestId", created_at AS "createdAt" FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 ORDER BY created_at DESC, role ASC LIMIT 100) recent ORDER BY created_at, role DESC`,
         [userId, conversationId],
       )
     ).rows as StoredMessage[];
+    const media = (
+      await this.pool.query(
+        `SELECT id,message_id,kind,filename,mime,bytes,width,height,duration,transcript,expires_at AS "expiresAt",provider_metadata AS metadata, expires_at>now() AS available FROM attachments WHERE user_id=$1 AND message_id=ANY($2::uuid[]) ORDER BY created_at,id`,
+        [userId, rows.map((r) => r.id)],
+      )
+    ).rows;
+    for (const row of rows) {
+      const attachments = media.filter((a) => a.message_id === row.id);
+      if (attachments.length) row.attachments = attachments;
+    }
+    return rows;
   }
+
   async begin(
     userId: string,
-    input: { conversationId: string; requestId: string; text: string },
+    input: {
+      conversationId: string;
+      requestId: string;
+      text: string;
+      attachmentIds?: string[];
+    },
   ) {
     const client = await this.pool.connect();
     try {
@@ -90,6 +112,21 @@ export class PostgresConversations implements ConversationStore {
             "request_conflict",
             "This request ID belongs to another message.",
           );
+        const previous = (
+          await client.query(
+            "SELECT id FROM attachments WHERE user_id=$1 AND message_id=$2 ORDER BY id",
+            [userId, row.id],
+          )
+        ).rows.map((r) => r.id);
+        if (
+          JSON.stringify(previous) !==
+          JSON.stringify([...(input.attachmentIds ?? [])].sort())
+        )
+          throw new RequestError(
+            409,
+            "request_conflict",
+            "This request ID belongs to different attachments.",
+          );
         await client.query("COMMIT");
         return {
           duplicate: true as const,
@@ -98,7 +135,7 @@ export class PostgresConversations implements ConversationStore {
         };
       }
       await client.query(
-        "UPDATE messages SET status='interrupted', error_code='interrupted', completed_at=now() WHERE user_id=$1 AND status='running' AND created_at < now() - interval '150 seconds'",
+        "UPDATE messages SET status='interrupted', error_code='interrupted', completed_at=now() WHERE user_id=$1 AND status='running' AND created_at < now() - interval '210 seconds'",
         [userId],
       );
       const busy = await client.query(
@@ -121,15 +158,51 @@ export class PostgresConversations implements ConversationStore {
           "quota",
           "You’ve reached the local preview limit. Try again in an hour.",
         );
+      const attachmentIds = input.attachmentIds ?? [];
+      const media = attachmentIds.length
+        ? (
+            await client.query(
+              "SELECT id,kind FROM attachments WHERE user_id=$1 AND id=ANY($2::uuid[]) AND message_id IS NULL AND expires_at>now() ORDER BY id FOR UPDATE",
+              [userId, attachmentIds],
+            )
+          ).rows
+        : [];
+      if (media.length !== attachmentIds.length)
+        throw new RequestError(
+          404,
+          "attachment",
+          "An attachment is expired or unavailable. Upload it again.",
+        );
+      if (
+        media.filter((a) => a.kind === "audio").length > 1 ||
+        media.filter((a) => a.kind === "image").length > 3
+      )
+        throw new RequestError(
+          400,
+          "attachment_limit",
+          "Send up to 3 images and 1 voice clip at a time.",
+        );
       const row = (
         await client.query(
           "INSERT INTO messages (conversation_id,user_id,request_id,role,content,status) VALUES ($1,$2,$3,'user',$4,'running') RETURNING id, created_at",
           [input.conversationId, userId, input.requestId, input.text],
         )
       ).rows[0];
+      if (media.length)
+        await client.query(
+          "UPDATE attachments SET message_id=$3,conversation_id=$4 WHERE user_id=$1 AND id=ANY($2::uuid[])",
+          [userId, attachmentIds, row.id, input.conversationId],
+        );
       await client.query(
         "UPDATE conversations SET title=CASE WHEN title='New conversation' THEN $3 ELSE title END, updated_at=now() WHERE id=$1 AND user_id=$2",
-        [input.conversationId, userId, input.text.slice(0, 70)],
+        [
+          input.conversationId,
+          userId,
+          input.text.slice(0, 70) ||
+            (media.some((m) => m.kind === "image")
+              ? "Image conversation"
+              : "Voice conversation"),
+        ],
       );
       await client.query("COMMIT");
       return {
@@ -139,7 +212,13 @@ export class PostgresConversations implements ConversationStore {
           conversationId: input.conversationId,
           requestId: input.requestId,
           messageId: row.id,
-          inputs: [{ type: "text" as const, text: input.text }],
+          inputs: [
+            { type: "text" as const, text: input.text },
+            ...media.map((m) => ({
+              type: m.kind as "image" | "audio",
+              attachmentId: m.id as string,
+            })),
+          ],
           receivedAt: row.created_at.toISOString(),
         },
       };
@@ -154,18 +233,39 @@ export class PostgresConversations implements ConversationStore {
     // Include complete turn pairs and the current user input; failed turns are not context.
     const rows = (
       await this.pool.query(
-        `SELECT role,content FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 AND created_at > now()-interval '7 days' AND (status='complete' OR id=$3) ORDER BY created_at DESC,role ASC LIMIT 20) recent ORDER BY created_at,role DESC`,
+        `SELECT id,role,content FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 AND created_at > now()-interval '7 days' AND (status='complete' OR id=$3) ORDER BY created_at DESC,role ASC LIMIT 20) recent ORDER BY created_at,role DESC`,
         [userId, conversationId, messageId],
       )
     ).rows;
     let size = 0;
-    const result: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const result: ConversationMessage[] = [];
+    const selectedRows: typeof rows = [];
     for (let i = rows.length - 1; i >= 0; i--) {
       size += rows[i].content.length;
       if (size > 16_000) break;
-      result.unshift(rows[i]);
+      selectedRows.unshift(rows[i]);
+      result.unshift({ role: rows[i].role, content: rows[i].content });
     }
-    while (result[0]?.role === "assistant") result.shift();
+    while (result[0]?.role === "assistant") {
+      result.shift();
+      selectedRows.shift();
+    }
+    const media = (
+      await this.pool.query(
+        "SELECT id,kind,message_id FROM attachments WHERE user_id=$1 AND message_id=ANY($2::uuid[]) ORDER BY created_at,id",
+        [userId, rows.map((r) => r.id)],
+      )
+    ).rows;
+    for (const [index, message] of result.entries()) {
+      const row = selectedRows[index];
+      const references = media
+        .filter((a) => a.message_id === row?.id)
+        .map((a) => ({
+          id: a.id as string,
+          kind: a.kind as "image" | "audio",
+        }));
+      if (references.length) message.attachments = references;
+    }
     return result;
   }
   async complete(request: UnifiedRequest, text: string) {

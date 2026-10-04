@@ -1,4 +1,5 @@
 import "./scripts/env";
+import { resolve } from "node:path";
 import { defineConfig } from "@playwright/test";
 const uri = new URL(
   process.env.DATABASE_URL ?? "postgresql://localhost/sahaay_test",
@@ -11,6 +12,7 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3100",
     browserName: "chromium",
+    launchOptions: { args: ["--use-fake-device-for-media-stream"] },
     trace: "off",
   },
   webServer: {
@@ -22,6 +24,7 @@ export default defineConfig({
       DATABASE_URL: uri.toString(),
       BETTER_AUTH_URL: "http://localhost:3100",
       SAHAAY_E2E: "1",
+      SAHAAY_MEDIA_DIR: resolve(".local/media-test"),
     },
   },
 });

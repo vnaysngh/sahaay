@@ -711,3 +711,141 @@ textarea:focus {
     animation: none !important;
   }
 }
+
+.media-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+}
+.media-controls > button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: #8a957f;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+.media-controls > button:hover {
+  background: #edf0e5;
+}
+.recording-status,
+.upload-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #87927e;
+}
+.recording-status {
+  color: #b97555;
+}
+.recording-status i {
+  display: block;
+  background: #b97555;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+}
+.upload-status svg {
+  animation: spin 1s linear infinite;
+}
+.pending-attachments,
+.message-attachments {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+}
+.attachment {
+  position: relative;
+  max-width: 100%;
+  border: 1px solid #dde3d5;
+  border-radius: 10px;
+  background: #f4f6ef;
+  overflow: hidden;
+}
+.attachment.image img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 260px;
+  max-height: 220px;
+  object-fit: contain;
+}
+.pending-attachments .attachment.image img {
+  max-width: 100px;
+  max-height: 90px;
+}
+.remove-attachment {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: 1px solid #dde3d5;
+  background: #fffefaee;
+  border-radius: 50%;
+  height: 23px;
+  width: 23px;
+  display: grid;
+  place-items: center;
+  color: #617059;
+}
+.voice-preview {
+  padding: 10px 12px;
+  max-width: 280px;
+}
+.voice-preview > span {
+  font-size: 10px;
+  color: #84927a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 15px;
+  overflow-wrap: anywhere;
+}
+.voice-preview audio {
+  width: 240px;
+  height: 35px;
+  margin-top: 7px;
+  display: block;
+  max-width: 100%;
+}
+.voice-preview details {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #627359;
+}
+.voice-preview details p {
+  line-height: 1.6;
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+.expired-media {
+  display: block;
+  padding: 12px;
+  font-size: 11px;
+  color: #91998b;
+}
+.message.user .message-content:has(.message-attachments) {
+  max-width: 90%;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 640px) {
+  .attachment.image img {
+    max-width: 220px;
+  }
+  .upload-status {
+    font-size: 9px;
+    max-width: 150px;
+  }
+  .retention-note {
+    line-height: 1.5;
+  }
+}

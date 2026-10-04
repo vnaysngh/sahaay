@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import Markdown from "react-markdown";
+import { useMedia, MediaControls, AttachmentPreview } from "./media-controls";
 import { authClient } from "../auth/client";
 import type { StoredMessage } from "../db/conversations";
 import type { ResponseEvent } from "../core/contracts";
@@ -39,6 +40,8 @@ export function Chat({ name }: { name: string }) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [sidebar, setSidebar] = useState(false);
+  const [stage, setStage] = useState("Sahaay is thinking");
+  const media = useMedia(setError);
   const end = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const sending = useRef(false);
@@ -79,7 +82,8 @@ export function Chat({ name }: { name: string }) {
     return () => clearInterval(timer);
   }, [selected, active, busy]);
   async function open(id: string) {
-    if (busy) return;
+    if (busy || media.uploading || media.recording || media.permission) return;
+    media.clear(true);
     setLoading(true);
     setError("");
     setDraft("");
@@ -94,7 +98,8 @@ export function Chat({ name }: { name: string }) {
     }
   }
   function newChat() {
-    if (busy) return;
+    if (busy || media.uploading || media.recording || media.permission) return;
+    media.clear(true);
     setSelected(null);
     setMessages([]);
     setDraft("");
@@ -104,19 +109,31 @@ export function Chat({ name }: { name: string }) {
   }
   async function send() {
     if (
-      !text.trim() ||
+      (!text.trim() && !media.pending.length) ||
       text.trim().length > 4000 ||
       sending.current ||
       active ||
-      loading
+      loading ||
+      media.uploading ||
+      media.recording ||
+      media.permission
     )
       return;
     const submitted = text.trim();
+    const attachments = [...media.pending];
+    const attachmentIds = attachments.map((a) => a.id);
     sending.current = true;
     setBusy(true);
     setError("");
     setText("");
     setDraft("");
+    setStage(
+      attachments.some((a) => a.kind === "audio")
+        ? "Transcribing your voice…"
+        : attachments.length
+          ? "Looking at your image…"
+          : "Sahaay is thinking",
+    );
     let id = selected;
     let finished = false;
     try {
@@ -138,6 +155,7 @@ export function Chat({ name }: { name: string }) {
           content: submitted,
           status: "running",
           createdAt: new Date().toISOString(),
+          attachments,
         },
       ]);
       const response = await fetch("/api/chat", {
@@ -147,12 +165,14 @@ export function Chat({ name }: { name: string }) {
           conversationId: id,
           requestId,
           text: submitted,
+          attachmentIds,
         }),
       });
       if (!response.ok) {
         const result = await response.json();
         throw new Error(result.error ?? "Couldn’t send your message.");
       }
+      media.clear();
       if (response.status === 202) {
         finished = true;
         return;
@@ -164,6 +184,14 @@ export function Chat({ name }: { name: string }) {
       function receive(line: string) {
         if (!line.trim()) return;
         const event = JSON.parse(line) as ResponseEvent;
+        if (event.type === "processing")
+          setStage(
+            event.stage === "transcribing"
+              ? "Transcribing your voice…"
+              : event.stage === "understanding"
+                ? "Looking at your image…"
+                : "Sahaay is thinking",
+          );
         if (event.type === "delta") setDraft((current) => current + event.text);
         if (event.type === "complete") finished = true;
         if (event.type === "error") {
@@ -286,7 +314,7 @@ export function Chat({ name }: { name: string }) {
           </div>
           <span className="preview-badge">
             <span />
-            Text preview
+            Early preview
           </span>
         </header>
         <div
@@ -349,6 +377,16 @@ export function Chat({ name }: { name: string }) {
                     </span>
                   )}
                   <div className="message-content">
+                    {Boolean(message.attachments?.length) && (
+                      <div className="message-attachments">
+                        {message.attachments?.map((attachment) => (
+                          <AttachmentPreview
+                            key={attachment.id}
+                            attachment={attachment}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {message.role === "assistant" ? (
                       <Markdown>{message.content}</Markdown>
                     ) : (
@@ -380,7 +418,7 @@ export function Chat({ name }: { name: string }) {
               {working && !draft && (
                 <div className="thinking" role="status">
                   <Sparkles size={16} />
-                  <span>Sahaay is thinking</span>
+                  <span>{stage}</span>
                   <i />
                   <i />
                   <i />
@@ -406,6 +444,17 @@ export function Chat({ name }: { name: string }) {
               void send();
             }}
           >
+            {media.pending.length > 0 && (
+              <div className="pending-attachments">
+                {media.pending.map((attachment) => (
+                  <AttachmentPreview
+                    key={attachment.id}
+                    attachment={attachment}
+                    remove={() => media.remove(attachment.id)}
+                  />
+                ))}
+              </div>
+            )}
             <textarea
               ref={composer}
               aria-label="Message Sahaay"
@@ -415,6 +464,15 @@ export function Chat({ name }: { name: string }) {
               rows={2}
               disabled={loading}
               onChange={(e) => setText(e.target.value)}
+              onPaste={(e) => {
+                const files = Array.from(e.clipboardData.files).filter((file) =>
+                  file.type.startsWith("image/"),
+                );
+                if (files.length) {
+                  e.preventDefault();
+                  if (!working) void media.upload(files);
+                }
+              }}
               onKeyDown={(e) => {
                 if (
                   e.key === "Enter" &&
@@ -427,13 +485,18 @@ export function Chat({ name }: { name: string }) {
               }}
             />
             <div className="composer-bottom">
-              <span className="composer-hint">
-                Text today. Images & voice coming next.
-              </span>
+              <MediaControls media={media} disabled={working || loading} />
               <button
                 className="send-button"
                 aria-label="Send message"
-                disabled={working || loading || !text.trim()}
+                disabled={
+                  working ||
+                  loading ||
+                  media.uploading ||
+                  media.recording ||
+                  media.permission ||
+                  (!text.trim() && !media.pending.length)
+                }
               >
                 {working ? (
                   <span className="sending-dot" />
@@ -450,7 +513,8 @@ export function Chat({ name }: { name: string }) {
             <span>Sahaay can make mistakes.</span>
           </div>
           <p className="retention-note">
-            Conversations expire after 7 days. Replies are processed by OpenAI.
+            Media expires after 24 hours; conversations after 7 days. OpenAI
+            processes images/replies; Sarvam transcribes voice.
           </p>
         </footer>
       </main>

@@ -8,6 +8,9 @@ import {
   readBody,
   errorResponse,
 } from "@/channels/web/http";
+import { Attachments } from "@/media/attachments";
+import { mediaNormalizer } from "@/core/normalize";
+import { createTranscriptionProvider } from "@/providers/transcription";
 import { createAgentProvider } from "@/providers/openai";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -19,7 +22,7 @@ export async function POST(request: Request) {
       throw new RequestError(
         400,
         "input",
-        "Send a message of 1–4,000 characters to a valid conversation.",
+        "Send text (up to 4,000 characters), images or a voice clip to a valid conversation.",
       );
     const store = new PostgresConversations(getPool());
     const provider = createAgentProvider();
@@ -34,7 +37,15 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         // Keep the run durable to a browser disconnect; only the transport closes.
-        for await (const event of respond(result.request, store, provider)) {
+        for await (const event of respond(
+          result.request,
+          store,
+          provider,
+          mediaNormalizer(
+            new Attachments(getPool()),
+            createTranscriptionProvider(),
+          ),
+        )) {
           if (!closed) {
             try {
               controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));

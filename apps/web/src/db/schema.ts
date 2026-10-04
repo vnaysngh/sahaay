@@ -1,5 +1,8 @@
 import {
   pgTable,
+  integer,
+  doublePrecision,
+  jsonb,
   text,
   timestamp,
   boolean,
@@ -105,6 +108,7 @@ export const messages = pgTable(
       columns: [t.conversationId, t.userId],
       foreignColumns: [conversations.id, conversations.userId],
     }).onDelete("cascade"),
+    unique("message_owned_id").on(t.id, t.userId),
     unique("message_request_role").on(t.userId, t.requestId, t.role),
     uniqueIndex("one_running_turn")
       .on(t.conversationId)
@@ -118,5 +122,46 @@ export const messages = pgTable(
       "message_status",
       sql`${t.status} IN ('running', 'complete', 'failed', 'interrupted')`,
     ),
+  ],
+);
+
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: uuid("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id"),
+    conversationId: uuid("conversation_id"),
+    kind: text("kind").notNull(),
+    filename: text("filename").notNull(),
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    duration: doublePrecision("duration"),
+    transcript: text("transcript"),
+    providerMetadata: jsonb("provider_metadata"),
+    createdAt: time("created_at").notNull().defaultNow(),
+    expiresAt: time("expires_at")
+      .notNull()
+      .default(sql`now()+interval '24 hours'`),
+  },
+  (t) => [
+    unique("attachment_owned_id").on(t.id, t.userId),
+    foreignKey({
+      columns: [t.messageId, t.userId],
+      foreignColumns: [messages.id, messages.userId],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.conversationId, t.userId],
+      foreignColumns: [conversations.id, conversations.userId],
+    }).onDelete("cascade"),
+    index("attachment_message").on(t.messageId),
+    index("attachment_owner_created").on(t.userId, t.createdAt),
+    index("attachment_expiry").on(t.expiresAt),
+    check("attachment_kind", sql`${t.kind} IN ('image','audio')`),
+    check("attachment_bytes", sql`${t.bytes}>0`),
   ],
 );
