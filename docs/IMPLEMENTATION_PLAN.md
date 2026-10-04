@@ -1,6 +1,6 @@
 # Sahaay MVP Implementation Plan
 
-**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 authorized by “awesome, go ahead” on 2026-10-04 and implemented locally.
+**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 implemented locally; M3 authorized by “go ahead with m3” and implemented locally.
 
 ## NEEDED FOR MVP — scope and architecture
 
@@ -92,7 +92,9 @@ M1 introduces `npm ci`, `npm run dev`, `npm run db:migrate`, `npm run db:migrate
 
 **Acceptance criteria:** Current research and public-page understanding return grounded answers and clickable sources, or honest limitations. Processing state is visible. Never claim an inaccessible page/video was inspected; no added search provider absent approval and evidence.
 
-**Commands required to verify:** `npm run db:migrate`; `npm test -- tests/research-links`; `npm run test:web -- research`; `npm run eval:research`; `npm run test:provider -- --suite research`; common checks.
+**Local implementation:** The single SDK agent invokes one small argument-free public research tool, backed by OpenAI hosted search using the configured model. Only the current public question and eligible explicitly referenced prior user URLs enter that tool; private history/images are excluded. Clarify missing public details for image-based research. Reject private/credential-bearing and document URLs; do not infer video access. At most one research invocation, four hosted search/open actions, 90 seconds for research and 180 seconds for the overall response. Actual annotations become verified inline links; consulted pages are separately labelled. Source records commit with the final assistant message and expire with its 7-day retention; publication time stays unknown unless supplied. No local page fetcher/crawler or additional service. Focused live comparison, public-URL and PDF-limit checks passed; this is not a broad factual-accuracy guarantee.
+
+**Commands required to verify:** `npm run db:migrate`; `npm test`; `npm run test:integration`; `npm run test:web`; common checks. Opt-in live check: `npm run test:live-research` (requires configured OpenAI access and the local app; only public fixtures, disposable account removed).
 
 ## M4 — Remember and Organize
 

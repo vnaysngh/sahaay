@@ -28,6 +28,9 @@ beforeAll(async () => {
     await readFile("apps/web/migrations/0002_attachments.sql", "utf8"),
   );
   await pool.query(
+    await readFile("apps/web/migrations/0003_research_sources.sql", "utf8"),
+  );
+  await pool.query(
     `INSERT INTO "user" (id,name,email) VALUES ('alice','Alice','alice@test.invalid'),('bob','Bob','bob@test.invalid')`,
   );
   db = new PostgresConversations(pool);
@@ -231,5 +234,56 @@ describe("PostgreSQL ownership and request lifecycle", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+  it("owns research provenance, deduplicates completion and expires sources with messages", async () => {
+    const conversation = await db.create("alice");
+    const run = await db.begin("alice", {
+      conversationId: conversation.id,
+      requestId: crypto.randomUUID(),
+      text: "public research",
+    });
+    if (run.duplicate) throw new Error("unexpected");
+    const sources = [
+      {
+        id: "S1",
+        url: "https://example.com/public",
+        title: "Official source",
+        kind: "cited" as const,
+        retrievedAt: new Date().toISOString(),
+        publishedAt: null,
+      },
+    ];
+    const id = await db.complete(
+      run.request,
+      "Evidence [1](https://example.com/public)",
+      sources,
+    );
+    expect(await db.complete(run.request, "duplicate", sources)).toBeNull();
+    const history = await db.history("alice", conversation.id);
+    expect(history.find((m) => m.id === id)?.sources).toEqual([
+      expect.objectContaining({ url: sources[0].url, kind: "cited" }),
+    ]);
+    await expect(db.history("bob", conversation.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      pool.query(
+        "INSERT INTO research_sources(user_id,message_id,source_key,url,title,kind,retrieved_at) VALUES('bob',$1,'S2','https://example.com','Foreign','cited',now())",
+        [id],
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+    await pool.query(
+      "UPDATE messages SET created_at=now()-interval '8 days' WHERE conversation_id=$1",
+      [conversation.id],
+    );
+    await db.cleanup();
+    expect(
+      (
+        await pool.query(
+          "SELECT id FROM research_sources WHERE message_id=$1",
+          [id],
+        )
+      ).rowCount,
+    ).toBe(0);
   });
 });

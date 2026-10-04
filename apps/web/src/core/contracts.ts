@@ -1,3 +1,13 @@
+export type ResearchSource = {
+  id: string;
+  url: string;
+  title: string;
+  kind: "cited" | "consulted";
+  retrievedAt: string;
+  publishedAt: string | null;
+};
+export type ProviderEvent =
+  { type: "researching" } | { type: "sources"; sources: ResearchSource[] };
 export type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
@@ -20,8 +30,9 @@ export type ResponseEvent =
   | {
       type: "processing";
       messageId: string;
-      stage: "thinking" | "understanding" | "transcribing";
+      stage: "thinking" | "understanding" | "transcribing" | "researching";
     }
+  | { type: "sources"; sources: ResearchSource[] }
   | { type: "delta"; text: string }
   | { type: "complete"; messageId: string; text: string }
   | { type: "error"; code: string; message: string };
@@ -29,7 +40,7 @@ export interface AgentProvider {
   stream(
     context: ConversationMessage[],
     options: { signal: AbortSignal; responseLanguage?: string },
-  ): AsyncIterable<string>;
+  ): AsyncIterable<string | ProviderEvent>;
 }
 export interface ConversationStore {
   context(
@@ -37,7 +48,11 @@ export interface ConversationStore {
     conversationId: string,
     messageId: string,
   ): Promise<ConversationMessage[]>;
-  complete(request: UnifiedRequest, text: string): Promise<string | null>;
+  complete(
+    request: UnifiedRequest,
+    text: string,
+    sources?: ResearchSource[],
+  ): Promise<string | null>;
   fail(request: UnifiedRequest, code: string): Promise<void>;
 }
 

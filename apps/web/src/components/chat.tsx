@@ -17,7 +17,7 @@ import Markdown from "react-markdown";
 import { useMedia, MediaControls, AttachmentPreview } from "./media-controls";
 import { authClient } from "../auth/client";
 import type { StoredMessage } from "../db/conversations";
-import type { ResponseEvent } from "../core/contracts";
+import type { ResponseEvent, ResearchSource } from "../core/contracts";
 type Conversation = { id: string; title: string; updatedAt: string };
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -186,11 +186,13 @@ export function Chat({ name }: { name: string }) {
         const event = JSON.parse(line) as ResponseEvent;
         if (event.type === "processing")
           setStage(
-            event.stage === "transcribing"
-              ? "Transcribing your voice…"
-              : event.stage === "understanding"
-                ? "Looking at your image…"
-                : "Sahaay is thinking",
+            event.stage === "researching"
+              ? "Researching the web…"
+              : event.stage === "transcribing"
+                ? "Transcribing your voice…"
+                : event.stage === "understanding"
+                  ? "Looking at your image…"
+                  : "Sahaay is thinking",
           );
         if (event.type === "delta") setDraft((current) => current + event.text);
         if (event.type === "complete") finished = true;
@@ -388,7 +390,31 @@ export function Chat({ name }: { name: string }) {
                       </div>
                     )}
                     {message.role === "assistant" ? (
-                      <Markdown>{message.content}</Markdown>
+                      <>
+                        <Markdown
+                          components={{
+                            img: ({ alt }) => (
+                              <span>
+                                {alt ? `Image: ${alt}` : "Image link omitted"}
+                              </span>
+                            ),
+                            a: ({ children, ...props }) => (
+                              <a
+                                {...props}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {message.content}
+                        </Markdown>
+                        {message.sources?.length ? (
+                          <ResearchSources sources={message.sources} />
+                        ) : null}
+                      </>
                     ) : (
                       <p>{message.content}</p>
                     )}
@@ -410,12 +436,20 @@ export function Chat({ name }: { name: string }) {
                     <Sparkles size={16} />
                   </span>
                   <div className="message-content">
-                    <Markdown>{draft}</Markdown>
+                    <Markdown
+                      components={{
+                        img: ({ alt }) => (
+                          <span>{alt || "Image link omitted"}</span>
+                        ),
+                      }}
+                    >
+                      {draft}
+                    </Markdown>
                     <span className="stream-cursor" />
                   </div>
                 </article>
               )}
-              {working && !draft && (
+              {working && (!draft || stage === "Researching the web…") && (
                 <div className="thinking" role="status">
                   <Sparkles size={16} />
                   <span>{stage}</span>
@@ -514,10 +548,51 @@ export function Chat({ name }: { name: string }) {
           </div>
           <p className="retention-note">
             Media expires after 24 hours; conversations after 7 days. OpenAI
-            processes images/replies; Sarvam transcribes voice.
+            processes images/replies and public research; Sarvam transcribes
+            voice.
           </p>
         </footer>
       </main>
     </div>
+  );
+}
+
+function ResearchSources({ sources }: { sources: ResearchSource[] }) {
+  const cited = sources.filter((source) => source.kind === "cited");
+  const consulted = sources.filter((source) => source.kind === "consulted");
+  function links(items: ResearchSource[]) {
+    return items.map((source) => (
+      <a
+        key={source.id}
+        href={source.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="source-link"
+      >
+        <span>{source.id.slice(1)}</span>
+        <div>
+          {source.title}
+          <small>{new URL(source.url).hostname}</small>
+        </div>
+        <span aria-hidden>↗</span>
+      </a>
+    ));
+  }
+  return (
+    <section className="research-sources" aria-label="Research sources">
+      <p>
+        {cited.length ? "Cited sources" : "Research sources"}
+        <small>
+          Checked {new Date(sources[0].retrievedAt).toLocaleDateString()}
+        </small>
+      </p>
+      {links(cited)}
+      {consulted.length > 0 && (
+        <details>
+          <summary>Other pages consulted ({consulted.length})</summary>
+          {links(consulted)}
+        </details>
+      )}
+    </section>
   );
 }

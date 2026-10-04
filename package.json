@@ -22,7 +22,8 @@
     "test:web": "playwright test",
     "test:provider": "tsx scripts/provider-smoke.ts",
     "test:live-web": "tsx scripts/web-smoke.ts",
-    "test:live-multimodal": "tsx scripts/multimodal-smoke.ts"
+    "test:live-multimodal": "tsx scripts/multimodal-smoke.ts",
+    "test:live-research": "tsx scripts/research-smoke.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

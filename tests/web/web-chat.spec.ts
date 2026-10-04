@@ -218,3 +218,33 @@ test("unsupported uploads and microphone denial have clear fallbacks", async ({
     ),
   ).toBeVisible();
 });
+
+test("research state, verified inline links, sources and persisted history", async ({
+  page,
+}) => {
+  await signup(page);
+  await page
+    .getByRole("textbox", { name: "Message Sahaay" })
+    .fill("Research https://example.com");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page.getByText("Researching the web…")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Research sources" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "1", exact: true }),
+  ).toHaveAttribute("href", "https://example.com/research");
+  await expect(page.locator(".source-link")).toHaveAttribute(
+    "href",
+    "https://example.com/research",
+  );
+  await page.reload();
+  await page
+    .getByRole("navigation", { name: "Conversation history" })
+    .getByRole("button")
+    .first()
+    .click();
+  await expect(
+    page.getByRole("region", { name: "Research sources" }),
+  ).toBeVisible();
+});

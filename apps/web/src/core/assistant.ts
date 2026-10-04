@@ -1,9 +1,11 @@
+import { formatResearchAnswer } from "./tools/research";
 import type {
   AgentProvider,
   ConversationStore,
   ResponseEvent,
   UnifiedRequest,
   InputNormalizer,
+  ResearchSource,
 } from "./contracts";
 export async function* respond(
   request: UnifiedRequest,
@@ -36,17 +38,36 @@ export async function* respond(
       };
     }
     let text = "";
+    let sources: ResearchSource[] = [];
     for await (const delta of provider.stream(context, {
       signal,
       responseLanguage: request.responseLanguage,
     })) {
+      if (typeof delta !== "string") {
+        if (delta.type === "researching")
+          yield {
+            type: "processing",
+            messageId: request.messageId,
+            stage: "researching",
+          };
+        else sources = delta.sources;
+        continue;
+      }
       text += delta;
       if (text.length > 24_000) throw new Error("output_limit");
       yield { type: "delta", text: delta };
     }
     if (!text.trim()) throw new Error("empty_response");
-    const id = await store.complete(request, text);
+    if (sources.length) {
+      const formatted = formatResearchAnswer(text, sources);
+      text = formatted.text;
+      sources = formatted.sources;
+    }
+    const id = sources.length
+      ? await store.complete(request, text, sources)
+      : await store.complete(request, text);
     if (!id) throw new Error("interrupted");
+    if (sources.length) yield { type: "sources", sources };
     yield { type: "complete", messageId: id, text };
   } catch (error) {
     const code =

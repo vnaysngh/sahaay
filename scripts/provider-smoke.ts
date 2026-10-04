@@ -15,6 +15,7 @@ async function main() {
     ],
     { signal: AbortSignal.timeout(120000) },
   )) {
+    if (typeof delta !== "string") continue;
     text += delta;
     chunks++;
   }

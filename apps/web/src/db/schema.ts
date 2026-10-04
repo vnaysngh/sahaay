@@ -165,3 +165,35 @@ export const attachments = pgTable(
     check("attachment_bytes", sql`${t.bytes}>0`),
   ],
 );
+
+export const researchSources = pgTable(
+  "research_sources",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id").notNull(),
+    sourceKey: text("source_key").notNull(),
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    kind: text("kind").notNull(),
+    retrievedAt: time("retrieved_at").notNull(),
+    publishedAt: time("published_at"),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.messageId, t.userId],
+      foreignColumns: [messages.id, messages.userId],
+    }).onDelete("cascade"),
+    unique("research_sources_message_id_source_key_key").on(
+      t.messageId,
+      t.sourceKey,
+    ),
+    index("research_source_message").on(t.messageId, t.userId),
+    check(
+      "research_sources_kind_check",
+      sql`${t.kind} IN ('cited','consulted')`,
+    ),
+  ],
+);

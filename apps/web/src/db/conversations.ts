@@ -3,6 +3,7 @@ import type {
   ConversationStore,
   UnifiedRequest,
   ConversationMessage,
+  ResearchSource,
 } from "../core/contracts";
 import { RequestError } from "../core/validation";
 export type StoredMessage = {
@@ -12,6 +13,7 @@ export type StoredMessage = {
   status: string;
   requestId: string;
   createdAt: string;
+  sources?: ResearchSource[];
   attachments?: import("../media/attachments").Attachment[];
 };
 export class PostgresConversations implements ConversationStore {
@@ -70,6 +72,25 @@ export class PostgresConversations implements ConversationStore {
     for (const row of rows) {
       const attachments = media.filter((a) => a.message_id === row.id);
       if (attachments.length) row.attachments = attachments;
+    }
+    const sources = (
+      await this.pool.query(
+        `SELECT message_id, source_key AS id,url,title,kind,retrieved_at AS "retrievedAt",published_at AS "publishedAt" FROM research_sources WHERE user_id=$1 AND message_id=ANY($2::uuid[]) ORDER BY source_key`,
+        [userId, rows.map((r) => r.id)],
+      )
+    ).rows;
+    for (const row of rows) {
+      const owned = sources
+        .filter((s) => s.message_id === row.id)
+        .map((s) => ({
+          id: s.id,
+          url: s.url,
+          title: s.title,
+          kind: s.kind,
+          retrievedAt: s.retrievedAt,
+          publishedAt: s.publishedAt,
+        }));
+      if (owned.length) row.sources = owned;
     }
     return rows;
   }
@@ -268,13 +289,32 @@ export class PostgresConversations implements ConversationStore {
     }
     return result;
   }
-  async complete(request: UnifiedRequest, text: string) {
+  async complete(
+    request: UnifiedRequest,
+    text: string,
+    sources: ResearchSource[] = [],
+  ) {
     return this.finish(request, async (client) => {
       const result = await client.query(
         "INSERT INTO messages (conversation_id,user_id,request_id,role,content,status,completed_at) VALUES ($1,$2,$3,'assistant',$4,'complete',now()) RETURNING id",
         [request.conversationId, request.userId, request.requestId, text],
       );
-      return result.rows[0].id as string;
+      const id = result.rows[0].id as string;
+      for (const source of sources)
+        await client.query(
+          "INSERT INTO research_sources(user_id,message_id,source_key,url,title,kind,retrieved_at,published_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+          [
+            request.userId,
+            id,
+            source.id,
+            source.url,
+            source.title,
+            source.kind,
+            source.retrievedAt,
+            source.publishedAt,
+          ],
+        );
+      return id;
     });
   }
   private async finish(
