@@ -7,7 +7,9 @@ export type ResearchSource = {
   publishedAt: string | null;
 };
 export type ProviderEvent =
-  { type: "researching" } | { type: "sources"; sources: ResearchSource[] };
+  | { type: "researching" }
+  | { type: "record_changes"; operations: string[] }
+  | { type: "sources"; sources: ResearchSource[] };
 export type ConversationMessage = {
   role: "user" | "assistant";
   content: string;
@@ -39,7 +41,11 @@ export type ResponseEvent =
 export interface AgentProvider {
   stream(
     context: ConversationMessage[],
-    options: { signal: AbortSignal; responseLanguage?: string },
+    options: {
+      signal: AbortSignal;
+      responseLanguage?: string;
+      request?: UnifiedRequest;
+    },
   ): AsyncIterable<string | ProviderEvent>;
 }
 export interface ConversationStore {

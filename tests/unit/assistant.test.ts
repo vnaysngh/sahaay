@@ -87,3 +87,20 @@ describe("one core pipeline", () => {
     ).toBe(false);
   });
 });
+
+it("reports committed changes independently when the remainder fails", async () => {
+  const db = store();
+  const provider: AgentProvider = {
+    async *stream() {
+      yield { type: "record_changes", operations: ["save"] };
+      throw Error("research outage with private details");
+    },
+  };
+  const events = await collect(respond(request, db, provider));
+  expect(events.at(-1)).toMatchObject({
+    type: "complete",
+    text: expect.stringContaining("Item saved. The rest"),
+  });
+  expect(db.fail).not.toHaveBeenCalled();
+  expect(JSON.stringify(events)).not.toContain("private details");
+});

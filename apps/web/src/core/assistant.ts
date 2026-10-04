@@ -22,6 +22,7 @@ export async function* respond(
         ? "understanding"
         : "thinking",
   };
+  let operations: string[] = [];
   try {
     let context = await store.context(
       request.userId,
@@ -41,6 +42,7 @@ export async function* respond(
     let sources: ResearchSource[] = [];
     for await (const delta of provider.stream(context, {
       signal,
+      request,
       responseLanguage: request.responseLanguage,
     })) {
       if (typeof delta !== "string") {
@@ -50,6 +52,7 @@ export async function* respond(
             messageId: request.messageId,
             stage: "researching",
           };
+        else if (delta.type === "record_changes") operations = delta.operations;
         else sources = delta.sources;
         continue;
       }
@@ -70,6 +73,30 @@ export async function* respond(
     if (sources.length) yield { type: "sources", sources };
     yield { type: "complete", messageId: id, text };
   } catch (error) {
+    if (operations.length) {
+      const labels: Record<string, string> = {
+        remember: "Memory saved",
+        update_memory: "Memory corrected",
+        forget: "Memory forgotten",
+        save: "Item saved",
+        update_item: "Item updated",
+        remove_item: "Item removed",
+      };
+      const text =
+        [...new Set(operations)]
+          .map((op) => labels[op] ?? "Record changed")
+          .join(". ") +
+        ". The rest of this response could not be completed. These changes are already committed; you can ask to see them.";
+      try {
+        const id = await store.complete(request, text);
+        if (id) {
+          yield { type: "complete", messageId: id, text };
+          return;
+        }
+      } catch {
+        /* Fall through to reconciliation. */
+      }
+    }
     const code =
       error instanceof Error &&
       ["TimeoutError", "AbortError"].includes(error.name)

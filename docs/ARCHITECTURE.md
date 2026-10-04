@@ -1,6 +1,6 @@
 # Sahaay MVP Architecture
 
-**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** User-directed Web Chat pivot; M1 authorized and implemented as a local text-chat slice. ADR-028 supersedes WhatsApp launch assumptions.
+**Updated:** 2026-10-05 (Asia/Kolkata). **Status:** User-directed Web Chat pivot; M1–M4 implemented locally. M4 schema/service proposal approved by “go ahead, lets move forward”. ADR-028 supersedes WhatsApp launch assumptions.
 
 ## NEEDED FOR MVP
 
@@ -62,12 +62,50 @@ All owned records and joins must be scoped to the authenticated user. Enforce ow
 | messages/request state | Owner/conversation, role, content, client request ID, status, error class, timestamps, parent/input references; user-scoped uniqueness | M1 |
 | attachments | Owner/message, type/MIME/size/duration/dimensions, private reference, transcript/summary, available language metadata, provider/model, expiry | M2 |
 | research_sources | Owner/message, URL/title, access and available publication time, cited/consulted distinction | M3 |
-| memories | Owner, explicit fact/value/unit/label, source IDs, observed/created time, version | M4 |
-| saved_items | Owner, content/reference, optional list label, explicit status, provenance/time/version | M4 |
+| memories | Explicit semantic/episodic personal facts; scoped, temporal, provenanced, correctable versions | M4 |
+| saved_items | Intentionally saved things; content/reference, optional list label, saved/done/archived status, provenance/time/version | M4 |
 | tool mutation evidence | Owner/request/action ID, operation/outcome, unique mutation key and minimal audit metadata | M4 |
 | product_events | Fixed coarse enums, pseudonymous user/request reference, timestamp; no raw private content | M5 |
 
 These are conceptual contracts; exact Drizzle migrations follow milestone need. Do not migrate unused future tables in M1. No embeddings, graph/person schemas, connected accounts, schedules or workflow definitions.
+
+## Memory decision — 2026-10-05
+
+**NEEDED FOR MVP:** Conversation history + explicit personal memory + separate saved items + relevant retrieval. PostgreSQL is Sahaay's source of truth for each. Saving an idea or considering a hotel does not establish a personal fact or preference. No automatic conversion between these records.
+
+- **Working/conversation memory:** Existing messages, attachments and bounded current context. Subject to conversation/media expiry; not permanent personal memory.
+- **Semantic personal memory:** Explicit facts/preferences, such as “Remember I prefer aisle seats.” Clear preference-setting language can authorize a write; an incidental preference mentioned in a story cannot. Clarify ambiguous intent.
+- **Episodic personal memory:** Explicitly remembered events, such as a purchase with its amount/date. Represent the type and optional structured value; no automatic event extraction or advanced temporal reasoning.
+- **Saved items:** Ideas, candidate hotels/products, links, research topics and simple lists intentionally saved by the user. Separate storage and service; no preference inference from saving, completing or archiving an item.
+
+**Approved M4 schema (implemented locally):**
+
+| Record | Fields and constraints |
+|---|---|
+| `memories` | `id`, `user_id`, `memory_key`, `type` (`semantic`/`episodic`), optional `category`, `content`, optional `structured_value`, `source_type`, `source_id`, optional originating `conversation_id`, `confidence`, `scope`, `valid_from`, nullable `valid_until`, nullable `supersedes_id`, `version`, `created_at`, `updated_at` |
+| `saved_items` | `id`, `user_id`, `kind`, `content`, optional URL/reference and `structured_value`, optional `list_label`, `status` (`saved`/`done`/`archived`), `source_type`, `source_id`, optional originating `conversation_id`, `version`, `created_at`, `updated_at` |
+| Minimal mutation evidence | Owner/request/action identifiers, operation, target identifiers/version and outcome; unique request/action key. No duplicate memory contents or raw media in audit records. |
+
+`memory_key` identifies versions of one explicitly established fact, within an owner and scope. Enforce one current version per `(user_id, scope, memory_key)`; clarify multiple/conflicting targets instead of guessing a merge. Use `version` for stale-write checks. A correction atomically ends the previous validity interval and creates its replacement, with `supersedes_id` pointing to the previous owned version. Current recall excludes superseded, expired and future-valid facts. Forget physically removes the selected fact's version chain, not merely its current visibility; saved-item deletion physically removes the separate item. Keep only necessary content-free retry/deletion evidence so an old request cannot recreate deleted content.
+
+MVP writes use `source_type = user_explicit` and `confidence = 1.0`; this records explicit user assertion, not independently verified truth. Originating message/conversation identifiers are checked for ownership at write time. Memory/items survive ordinary source-message expiry: retain provenance identifiers/type/timestamps without retaining the original transcript/media or claiming expired evidence is readable. Resolve source content only through an ownership-checked repository; explain when it has expired.
+
+Start `scope` with `personal` by default and simple explicit labels when needed, plus an optional category. This is a retrieval filter, not a Skills permission system. Do not invent an extensive taxonomy or automatically expose all scopes to every request.
+
+**Implemented service boundary:** `Sahaay Agent → MemoryService → PostgreSQL`; separately `Sahaay Agent → SavedItemService → PostgreSQL`. Small internal TypeScript interfaces and SQL repositories suffice. All operations receive server-derived ownership; mutation context carries current request/action ID, explicit authorization and originating message. Agent/tool callers never issue scattered SQL or supply their own user identity.
+
+| Service | MVP operations |
+|---|---|
+| `MemoryService` | `remember(owner, input, mutationContext)`, `recall(owner, filters)`, `list(owner, options)`, `update(owner, id, input, expectedVersion, mutationContext)`, `forget(owner, id, expectedVersion, mutationContext)` |
+| `SavedItemService` | `save(owner, input, mutationContext)`, `find/list(owner, filters)`, `update(owner, id, input, expectedVersion, mutationContext)`, `remove(owner, id, expectedVersion, mutationContext)` |
+
+Reads use relevant scope/category/type, structured fields, recency and bounded lightweight text matching. Do not inject the entire memory store or saved-item collection into each request. Explain provenance when asked. Durable recall/correction/deletion uses service results as authority; distinguish any remaining temporary chat history from current durable memory. Never recreate forgotten/corrected facts from old chat context without a new explicit instruction. Retrieved memory/items and page/image contents cannot authorize writes. Private recalled facts/items remain outside M3's public-search payload.
+
+M4 uses migrations `0004_memory_items.sql` and `0005_record_context.sql`. The latter adds only content-free source IDs to existing message rows for turns that used durable records. Correction/forget excludes both original source turns and earlier record-derived answers from working context; visible chat history retains its existing 7-day expiry. Correction turns replace their old source references so their new state remains usable. Mutation receipts contain IDs/operation/version only, expire after 30 days, and are consulted before replay; deleted records are never recreated on retry. Reads return at most eight matching records; the single SDK agent has at most six turns, twelve record-tool calls and eight mutations per request, inside the existing 180-second timeout. Each store has a 500-row local preview limit. Explicit personal-memory requests are excluded from public research; a combined personal-memory/research request asks for a separate public question. A saved public research topic can still compose save plus research.
+
+Chat is sufficient for listing, editing and deleting both concepts. Save plus research must report each outcome independently; a research failure must not hide or repeat a committed save.
+
+**DEFER UNTIL VALIDATED:** Procedural memory, inferred/imported/connected-service writes, background consolidation, automatic profile/relationship/preference extraction, behavioral learning, Personal Graph, Skills access controls, advanced temporal reasoning/ranking, embeddings, pgvector/vector/graph infrastructure and third-party memory providers. The fields and small service interfaces preserve future seams; do not implement these future mechanisms or a memory dashboard now.
 
 ## Media, context and research
 

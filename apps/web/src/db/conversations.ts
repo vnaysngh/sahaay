@@ -20,6 +20,9 @@ export class PostgresConversations implements ConversationStore {
   constructor(private pool: Pool) {}
   async cleanup() {
     await this.pool.query(
+      "DELETE FROM record_mutations WHERE expires_at<now()",
+    );
+    await this.pool.query(
       "DELETE FROM messages WHERE created_at < now() - interval '7 days'",
     );
     await this.pool.query(
@@ -254,7 +257,7 @@ export class PostgresConversations implements ConversationStore {
     // Include complete turn pairs and the current user input; failed turns are not context.
     const rows = (
       await this.pool.query(
-        `SELECT id,role,content FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 AND created_at > now()-interval '7 days' AND (status='complete' OR id=$3) ORDER BY created_at DESC,role ASC LIMIT 20) recent ORDER BY created_at,role DESC`,
+        `SELECT id,role,content FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 AND created_at > now()-interval '7 days' AND (status='complete' OR id=$3) AND (id=$3 OR NOT EXISTS(SELECT 1 FROM record_mutations rm WHERE rm.user_id=$1 AND rm.expires_at>now() AND (EXISTS(SELECT 1 FROM messages origin WHERE origin.id=ANY(rm.suppressed_source_ids) AND origin.user_id=$1 AND origin.request_id=messages.request_id) OR EXISTS(SELECT 1 FROM messages turn WHERE turn.user_id=$1 AND turn.request_id=messages.request_id AND turn.role='user' AND turn.context_record_source_ids && rm.suppressed_source_ids)))) ORDER BY created_at DESC,role ASC LIMIT 20) recent ORDER BY created_at,role DESC`,
         [userId, conversationId, messageId],
       )
     ).rows;

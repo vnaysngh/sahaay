@@ -160,9 +160,11 @@ test("microphone recording can be cancelled and completed without using a real d
 }) => {
   await context.grantPermissions(["microphone"]);
   await page.addInitScript(() => {
-    // Generate local sound; never acquire a real microphone in automation.
+    // Keep generated sources alive for both recordings; no real microphone.
+    const audioContexts: AudioContext[] = [];
     navigator.mediaDevices.getUserMedia = async () => {
       const audio = new AudioContext();
+      audioContexts.push(audio);
       const destination = audio.createMediaStreamDestination();
       const oscillator = audio.createOscillator();
       oscillator.connect(destination);
@@ -247,4 +249,72 @@ test("research state, verified inline links, sources and persisted history", asy
   await expect(
     page.getByRole("region", { name: "Research sources" }),
   ).toBeVisible();
+});
+
+test("memory across conversations, provenance, correction and physical forget", async ({
+  page,
+}) => {
+  await signup(page);
+  async function send(text: string, answer: string) {
+    await page.getByRole("textbox", { name: "Message Sahaay" }).fill(text);
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(
+      page.locator(".message.assistant:not(.streaming)").last(),
+    ).toContainText(answer);
+  }
+  await send(
+    "Remember I prefer aisle seats on flights.",
+    "Remembered your aisle seat preference.",
+  );
+  await page.getByRole("button", { name: /New conversation/ }).click();
+  await send("What is my preferred flight seat?", "I prefer aisle seats");
+  await send(
+    "Actually I prefer window seats on flights.",
+    "Updated your preference to window seats",
+  );
+  await send(
+    "Why do you remember my flight seat preference?",
+    "You explicitly asked",
+  );
+  await send(
+    "Forget my flight seat preference.",
+    "Forgotten your flight seat preference",
+  );
+  await page.getByRole("button", { name: /New conversation/ }).click();
+  await send(
+    "What is my preferred flight seat?",
+    "I have no saved flight seat preference",
+  );
+});
+test("saved idea persists through research failure and supports organization/removal", async ({
+  page,
+}) => {
+  await signup(page);
+  async function send(text: string, answer: string) {
+    await page.getByRole("textbox", { name: "Message Sahaay" }).fill(text);
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(
+      page.locator(".message.assistant:not(.streaming)").last(),
+    ).toContainText(answer);
+  }
+  await send(
+    "Save this video idea and simulate research failure: a quiet city walk at dawn.",
+    "Item saved. The rest of this response could not be completed",
+  );
+  await page.getByRole("button", { name: /New conversation/ }).click();
+  await send("Show my saved video ideas.", "A quiet city walk at dawn (saved)");
+  await send(
+    "Mark the city walk video idea done.",
+    "Marked the city walk idea done",
+  );
+  await send("Show my saved video ideas.", "A quiet city walk at dawn (done)");
+  await send(
+    "Delete the saved city walk video idea.",
+    "Removed the city walk video idea",
+  );
+  await send("Show my saved video ideas.", "No saved video ideas");
 });

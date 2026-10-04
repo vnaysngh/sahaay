@@ -64,6 +64,16 @@ export function researchTask(context: ConversationMessage[]): {
       .at(-1)
       ?.content.replace(/\[Voice transcript, attachment [^\]]+\]:\s*/g, "") ??
     "";
+  if (
+    /\b(remember|forget|my preference is|update my memory|correct my memory)\b|याद (?:रख|रखना)|भूल जाओ|yaad rakh/i.test(
+      current,
+    )
+  )
+    return {
+      task: "",
+      limitation:
+        "This is a personal memory request. Do not send its private facts to public web research. Complete the authorized memory operation; ask for a separate public research question if needed.",
+    };
   const currentUrls = urlsIn(current);
   if (currentUrls.some((url) => !publicUrl(url)))
     return {

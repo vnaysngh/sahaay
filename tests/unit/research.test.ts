@@ -198,3 +198,15 @@ describe("bounded public research and real citation provenance", () => {
     expect(events.at(-1)?.type).toBe("complete");
   });
 });
+
+it("never sends an explicit personal-memory request into public search", () => {
+  expect(
+    researchTask([
+      {
+        role: "user",
+        content:
+          "Remember I prefer aisle seats and research current flight options",
+      },
+    ]).task,
+  ).toBe("");
+});

@@ -1,6 +1,6 @@
 # Sahaay MVP Implementation Plan
 
-**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 implemented locally; M3 authorized by “go ahead with m3” and implemented locally.
+**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 implemented locally; M3 authorized by “go ahead with m3” and implemented locally. M4 memory decision and schema/interfaces approved on 2026-10-05; M4 implemented locally, with M5 remaining.
 
 ## NEEDED FOR MVP — scope and architecture
 
@@ -100,19 +100,28 @@ M1 introduces `npm ci`, `npm run dev`, `npm run db:migrate`, `npm run db:migrate
 
 **Classification:** NEEDED FOR MVP.
 
-**Objective:** Explicitly save, recall, correct/delete facts and organize saved items through chat.
+**Objective:** Explicit personal memory and relevant cross-conversation recall, with correction/forget; separately save, retrieve and organize items through chat. Working conversation context is not durable personal memory.
 
-**Files/packages affected:** Memory/saved-item/tool-audit migrations; small `src/core/tools/{memory,items}` and SQL repositories; chat confirmations; `tests/memory-items`.
+**Files/packages affected:** `0004_memory_items.sql`, `0005_record_context.sql` and Drizzle schema; `src/core/{memory,items}` service contracts; `src/providers/record-tools` SDK tools; separate PostgreSQL repositories; existing agent/context integration and chat confirmations; unit, PostgreSQL integration and browser tests.
 
-**Dependencies:** M1–M3; explicit persistence/ownership/deletion rules.
+**Dependencies:** M1–M3; the 2026-10-05 memory decision; proposed schema/interface review in ARCHITECTURE.md; explicit persistence/ownership/deletion rules. No new datastore, provider or management UI.
 
-**Implementation steps:** Implement Sahaay-owned fact/item records with provenance, timestamps and versions. Retrieve with scoped SQL/full-text/labels/date filters. Require explicit save/update/delete intent; clarify ambiguous targets. Use stable logical action IDs and transactionally idempotent writes with minimal audit evidence. Keep lists/labels and explicit saved/done/archived status simple. Compose save plus research with separately reported outcomes. Prevent deleted facts from being silently reintroduced from retained conversations. No memory dashboard required.
+**Implementation steps — independently testable slices:**
 
-**Tests:** Remember/recall amounts and units; conflicting facts; list/edit/delete; two-user isolation; retry/concurrency duplicate writes; source expiry; injected persistence requests; deletion residuals and partial save/research failures.
+1. **M4a: Owned storage and services.** After schema/interface review, introduce separate `memories` and `saved_items` tables and small `MemoryService`/`SavedItemService` repositories. Use the proposed semantic/episodic type, optional category/structured value, simple scope, explicit provenance/confidence, validity interval, supersession and version fields. Add only necessary content-free idempotency evidence. Verify backend remember/list/recall/update/forget and separate item CRUD without model calls. Dependencies: M1–M3 and schema review. Acceptance: SQL ownership constraints, atomic corrections and physical deletion pass unit/integration tests. Commands: `npm run db:migrate`, `npm test`, `npm run test:integration`.
+2. **M4b: Relevant recall.** Integrate bounded deterministic retrieval into the existing core/agent using scope/category/type, structured fields, recency and lightweight text matching. Separate personal fact retrieval from saved-item searches. Preserve original message/conversation identifiers and show source expiry honestly. Dependencies: M4a. Acceptance: a preference explicitly remembered in conversation A is recalled in conversation B; unrelated facts/items and expired/superseded facts are excluded. Commands: `npm test`, `npm run test:integration`, `npm run test:web`.
+3. **M4c: Explicit memory controls through chat.** Add remember/list/provenance/edit/forget tools with server-derived ownership and current-request authorization. Incidental statements and untrusted content cannot authorize writes. Clarify ambiguous correction/deletion targets. A correction ends the old interval and creates one current replacement; forget deletes the complete targeted version chain. Stale versions/retries cannot restore an old fact, and chat history must not be represented as durable recall after deletion. Dependencies: M4a–M4b. Acceptance: aisle → window → forget works across conversations, with no duplicate writes or resurrection. Commands: `npm test`, `npm run test:integration`, `npm run test:web`.
+4. **M4d: Saved items and ordinary composition.** Add save/find/list/edit/remove tools for ideas, candidates, links, dated records and research topics, with simple list labels and saved/done/archived status. Saving a hotel/idea must not create a preference/personal memory. Compose explicitly requested save plus research and report each outcome, including partial failure, without repeating committed writes. Dependencies: M4a–M4c and M3 research. Acceptance: independent saved-item CRUD works in chat and a research outage preserves exactly one successful save. Commands: `npm test`, `npm run test:integration`, `npm run test:web`.
 
-**Acceptance criteria:** Requested facts/items are saved once, recalled accurately, editable/deletable in chat, and attributable to their source/time. No automatic transcript memory, background tracking, graph/vector service or persona schemas.
+Each slice uses existing app modules and PostgreSQL; common lint/type/build checks apply. No memory dashboard, automatic inference/synthesis, Skills permission system, procedural-memory engine or advanced retrieval infrastructure.
 
-**Commands required to verify:** `npm run db:migrate`; `npm test -- tests/memory-items`; `npm run test:web -- memory-items`; common checks.
+**Tests:** Explicit remember in A/recall in B; semantic versus episodic facts and amounts/units; saved ideas/hotel candidates do not become preferences; relevant-only retrieval and scope isolation; current versus superseded/expired facts; provenance after source expiry; list/edit/physical delete; stale corrections and retry/concurrency idempotency; two-user isolation; untrusted-content write attempts; no automatic inference/resurrection; deletion of version chains and content-free audit evidence; partial save/research failures.
+
+**Acceptance criteria:** Separate memory/item semantics persist end-to-end. Explicit facts/items are saved once, recalled only when relevant, editable/physically deletable in chat and attributable to their source/time. One current state exists after an explicit correction; deleted versions cannot reappear through retry or passive extraction. Source expiry does not delete a deliberately durable record. No automatic transcript memory, background tracking, graph/vector service or persona schemas.
+
+**Commands required to verify:** `npm run db:migrate`; `npm test`; `npm run test:integration`; `npm run test:web`; common checks. Opt-in live checks: `npm run test:live-memory` and `npm run test:live-memory -- --hindi` and `npm run test:live-memory -- --composition`, using disposable accounts and synthetic facts; normal tests do not call providers.
+
+**Local M4 implementation:** Separate owned memory/items with explicit text or owned voice authorization, semantic/episodic types, structured amounts/units, scope/provenance, bounded keyword reads, atomic version corrections and physical forget/item removal. Chat supports saved lists, editing, done/archive status and deletion. Content-free mutation receipts prevent retry resurrection; source IDs on existing messages prevent earlier recall answers from reviving corrected/forgotten facts. A committed save survives a failed remaining response and is reported independently. No dashboard, automatic extraction or added infrastructure. Verified locally: 23 unit tests, 16 PostgreSQL integration tests and 10 browser tests; live English memory/item flow, Hindi remember/recall/correction/forget, and save-plus-public-research with actual citations. Broader phrasing/retrieval/language quality evaluation remains part of M5.
 
 ## M5 — Product validation and controlled launch
 

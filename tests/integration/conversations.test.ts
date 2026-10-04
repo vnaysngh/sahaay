@@ -31,6 +31,12 @@ beforeAll(async () => {
     await readFile("apps/web/migrations/0003_research_sources.sql", "utf8"),
   );
   await pool.query(
+    await readFile("apps/web/migrations/0004_memory_items.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0005_record_context.sql", "utf8"),
+  );
+  await pool.query(
     `INSERT INTO "user" (id,name,email) VALUES ('alice','Alice','alice@test.invalid'),('bob','Bob','bob@test.invalid')`,
   );
   db = new PostgresConversations(pool);

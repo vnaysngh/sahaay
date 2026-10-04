@@ -1,3 +1,5 @@
+import { PostgresMemory } from "@/db/memory";
+import { PostgresSavedItems } from "@/db/items";
 import { getPool } from "@/db";
 import { PostgresConversations } from "@/db/conversations";
 import { respond } from "@/core/assistant";
@@ -25,13 +27,16 @@ export async function POST(request: Request) {
         "Send text (up to 4,000 characters), images or a voice clip to a valid conversation.",
       );
     const store = new PostgresConversations(getPool());
-    const provider = createAgentProvider();
     const result = await store.begin(user.id, parsed.data);
     if (result.duplicate)
       return Response.json(
         { duplicate: true, messageId: result.messageId, status: result.status },
         { status: 202 },
       );
+    const provider = createAgentProvider({
+      memories: new PostgresMemory(getPool(), result.request),
+      items: new PostgresSavedItems(getPool(), result.request),
+    });
     let closed = false;
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

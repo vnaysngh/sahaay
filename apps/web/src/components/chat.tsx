@@ -547,7 +547,8 @@ export function Chat({ name }: { name: string }) {
             <span>Sahaay can make mistakes.</span>
           </div>
           <p className="retention-note">
-            Media expires after 24 hours; conversations after 7 days. OpenAI
+            Media expires after 24 hours; conversations after 7 days. Explicit
+            memories and saved items stay until you ask to delete them. OpenAI
             processes images/replies and public research; Sarvam transcribes
             voice.
           </p>
