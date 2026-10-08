@@ -83,7 +83,7 @@ export function useMedia(onError: (error: string) => void) {
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     if (recorder.current?.state === "recording") recorder.current.stop();
-    microphone.current?.getTracks().forEach((t) => t.stop());
+    else microphone.current?.getTracks().forEach((t) => t.stop());
     setRecording(false);
   }
   async function start() {
@@ -146,6 +146,10 @@ export function useMedia(onError: (error: string) => void) {
             void upload([
               new File([blob], "voice-recording.webm", { type: blob.type }),
             ]);
+          } else if (!cancelled.current.has(instance)) {
+            onError(
+              "The recording was empty. Try again or upload an audio file.",
+            );
           }
         }
       };

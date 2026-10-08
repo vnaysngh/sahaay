@@ -8,6 +8,7 @@ import {
   rm,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { seal, unseal } from "./artifact-crypto";
 import { RequestError } from "../core/validation";
 export class MediaFiles {
   constructor(
@@ -21,12 +22,30 @@ export class MediaFiles {
       throw new RequestError(400, "id", "Invalid attachment.");
     return join(this.root, id);
   }
-  async put(id: string, data: Buffer) {
+  async put(id: string, data: Buffer, owner?: string) {
     await mkdir(this.root, { recursive: true, mode: 0o700 });
-    await writeFile(this.path(id), data, { flag: "wx", mode: 0o600 });
+    const bytes = owner
+      ? Buffer.concat([
+          Buffer.from("SAHAAY_IMAGE_V1\n"),
+          await seal(data, owner, id, "temporary_preview"),
+        ])
+      : data;
+    await writeFile(this.path(id), bytes, { flag: "wx", mode: 0o600 });
   }
-  async read(id: string) {
-    return readFile(this.path(id));
+  async read(id: string, owner?: string) {
+    const bytes = await readFile(this.path(id)),
+      header = Buffer.from("SAHAAY_IMAGE_V1\n");
+    if (bytes.subarray(0, header.length).equals(header)) {
+      if (!owner)
+        throw new RequestError(403, "owner", "Image ownership is required.");
+      return unseal(
+        bytes.subarray(header.length),
+        owner,
+        id,
+        "temporary_preview",
+      );
+    }
+    return bytes;
   }
   async remove(id: string) {
     try {

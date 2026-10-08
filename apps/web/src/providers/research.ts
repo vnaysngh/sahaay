@@ -1,6 +1,15 @@
 import type OpenAI from "openai";
 import type { ResearchSource } from "../core/contracts";
 import { publicUrl } from "../core/tools/research";
+export class ResearchFailure extends Error {
+  constructor(
+    code: "research_incomplete" | "research_ungrounded",
+    readonly reason: string,
+    readonly outputTokens = 0,
+  ) {
+    super(code);
+  }
+}
 export function researchEvidence(
   response: Pick<OpenAI.Responses.Response, "output">,
 ) {
@@ -93,9 +102,20 @@ export async function researchPublicWeb(
   const response = await client.responses.create(params, {
     signal: AbortSignal.any([signal, AbortSignal.timeout(90_000)]),
   });
-  if (response.status !== "completed") throw new Error("research_incomplete");
+  if (response.status !== "completed")
+    throw new ResearchFailure(
+      "research_incomplete",
+      response.incomplete_details?.reason === "max_output_tokens"
+        ? "token_limit"
+        : "incomplete",
+      response.usage?.output_tokens ?? 0,
+    );
   const result = researchEvidence(response);
   if (!result.text || !result.sources.some((s) => s.kind === "cited"))
-    throw new Error("research_ungrounded");
+    throw new ResearchFailure(
+      "research_ungrounded",
+      "missing_citations",
+      response.usage?.output_tokens ?? 0,
+    );
   return result;
 }

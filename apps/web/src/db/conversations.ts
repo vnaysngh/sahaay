@@ -1,9 +1,11 @@
+import { boundedConversationRows } from "../core/conversation-context";
 import type { Pool, PoolClient } from "pg";
 import type {
   ConversationStore,
   UnifiedRequest,
   ConversationMessage,
   ResearchSource,
+  ArtifactReference,
 } from "../core/contracts";
 import { RequestError } from "../core/validation";
 export type StoredMessage = {
@@ -14,11 +16,24 @@ export type StoredMessage = {
   requestId: string;
   createdAt: string;
   sources?: ResearchSource[];
+  artifacts?: ArtifactReference[];
   attachments?: import("../media/attachments").Attachment[];
 };
 export class PostgresConversations implements ConversationStore {
   constructor(private pool: Pool) {}
   async cleanup() {
+    await this.pool.query(
+      "DELETE FROM telegram_link_codes WHERE expires_at<now()",
+    );
+    await this.pool.query(
+      "DELETE FROM telegram_updates WHERE created_at<now()-interval '30 days'",
+    );
+    await this.pool.query(
+      "DELETE FROM product_events WHERE created_at<now()-interval '30 days'",
+    );
+    await this.pool.query(
+      "DELETE FROM rate_limit WHERE last_request < EXTRACT(EPOCH FROM now()-interval '10 minutes')*1000",
+    );
     await this.pool.query(
       "DELETE FROM record_mutations WHERE expires_at<now()",
     );
@@ -33,6 +48,9 @@ export class PostgresConversations implements ConversationStore {
     );
     await this.pool.query(
       "UPDATE messages SET status='interrupted', error_code='interrupted', completed_at=now() WHERE status='running' AND created_at < now() - interval '210 seconds'",
+    );
+    await this.pool.query(
+      "UPDATE product_events e SET outcome='interrupted',error_class='interrupted' WHERE outcome='started' AND created_at<now()-interval '210 seconds' AND NOT EXISTS(SELECT 1 FROM messages m WHERE m.user_id=e.user_id AND m.request_id=e.request_id AND m.role='user' AND m.status='running')",
     );
   }
   async list(userId: string) {
@@ -76,6 +94,18 @@ export class PostgresConversations implements ConversationStore {
       const attachments = media.filter((a) => a.message_id === row.id);
       if (attachments.length) row.attachments = attachments;
     }
+    const artifactRows = (
+      await this.pool.query(
+        "SELECT ma.message_id,a.id,a.title FROM message_artifacts ma JOIN artifacts a ON a.id=ma.artifact_id AND a.user_id=ma.user_id WHERE ma.user_id=$1 AND ma.message_id=ANY($2::uuid[])",
+        [userId, rows.map((r) => r.id)],
+      )
+    ).rows;
+    for (const row of rows) {
+      const files = artifactRows
+        .filter((a) => a.message_id === row.id)
+        .map((a) => ({ id: a.id, title: a.title }));
+      if (files.length) row.artifacts = files;
+    }
     const sources = (
       await this.pool.query(
         `SELECT message_id, source_key AS id,url,title,kind,retrieved_at AS "retrievedAt",published_at AS "publishedAt" FROM research_sources WHERE user_id=$1 AND message_id=ANY($2::uuid[]) ORDER BY source_key`,
@@ -115,6 +145,17 @@ export class PostgresConversations implements ConversationStore {
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         [userId],
       );
+      const paused = (
+        await client.query('SELECT processing_paused FROM "user" WHERE id=$1', [
+          userId,
+        ])
+      ).rows[0];
+      if (!paused || paused.processing_paused)
+        throw new RequestError(
+          403,
+          "paused",
+          "Your assistant is paused. Resume it in Privacy to send messages.",
+        );
       const owned = await client.query(
         "SELECT id FROM conversations WHERE id=$1 AND user_id=$2 FOR UPDATE",
         [input.conversationId, userId],
@@ -253,27 +294,59 @@ export class PostgresConversations implements ConversationStore {
       client.release();
     }
   }
+  async recallHistory(userId: string, conversationId: string | null) {
+    await this.cleanup();
+    const paused = await this.pool.query(
+      'SELECT id FROM "user" WHERE id=$1 AND processing_paused=false',
+      [userId],
+    );
+    if (!paused.rowCount)
+      throw new RequestError(403, "paused", "Assistant is paused.");
+    const threads = (
+      await this.pool.query(
+        `SELECT id, updated_at FROM conversations WHERE user_id=$1 AND ($2::uuid IS NULL OR id=$2) ORDER BY updated_at DESC LIMIT 5`,
+        [userId, conversationId],
+      )
+    ).rows;
+    const conversations = [];
+    for (const thread of threads) {
+      // Reuse working-context suppression for forgotten/corrected record sources.
+      const messages = await this.context(
+        userId,
+        thread.id,
+        "00000000-0000-0000-0000-000000000000",
+      );
+      if (!messages.length) continue;
+      conversations.push({
+        id: thread.id,
+        updatedAt: thread.updated_at,
+        messages: messages.slice(-6).map(({ role, content }) => ({
+          role,
+          content: content.slice(0, 800),
+        })),
+      });
+    }
+    return {
+      conversations,
+      limit: 5,
+      retentionDays: 7,
+      messagesPerThread: 6,
+      contentMayBeTruncated: true,
+    };
+  }
   async context(userId: string, conversationId: string, messageId: string) {
     // Include complete turn pairs and the current user input; failed turns are not context.
     const rows = (
       await this.pool.query(
-        `SELECT id,role,content FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 AND created_at > now()-interval '7 days' AND (status='complete' OR id=$3) AND (id=$3 OR NOT EXISTS(SELECT 1 FROM record_mutations rm WHERE rm.user_id=$1 AND rm.expires_at>now() AND (EXISTS(SELECT 1 FROM messages origin WHERE origin.id=ANY(rm.suppressed_source_ids) AND origin.user_id=$1 AND origin.request_id=messages.request_id) OR EXISTS(SELECT 1 FROM messages turn WHERE turn.user_id=$1 AND turn.request_id=messages.request_id AND turn.role='user' AND turn.context_record_source_ids && rm.suppressed_source_ids)))) ORDER BY created_at DESC,role ASC LIMIT 20) recent ORDER BY created_at,role DESC`,
+        `SELECT id,request_id,role,content FROM (SELECT * FROM messages WHERE user_id=$1 AND conversation_id=$2 AND created_at > now()-interval '7 days' AND (status='complete' OR id=$3) AND (id=$3 OR NOT EXISTS(SELECT 1 FROM record_mutations rm WHERE rm.user_id=$1 AND rm.expires_at>now() AND (EXISTS(SELECT 1 FROM messages origin WHERE origin.id=ANY(rm.suppressed_source_ids) AND origin.user_id=$1 AND origin.request_id=messages.request_id) OR EXISTS(SELECT 1 FROM messages turn WHERE turn.user_id=$1 AND turn.request_id=messages.request_id AND turn.role='user' AND turn.context_record_source_ids && rm.suppressed_source_ids)))) ORDER BY created_at DESC,role ASC LIMIT 25) recent ORDER BY created_at,role DESC`,
         [userId, conversationId, messageId],
       )
     ).rows;
-    let size = 0;
-    const result: ConversationMessage[] = [];
-    const selectedRows: typeof rows = [];
-    for (let i = rows.length - 1; i >= 0; i--) {
-      size += rows[i].content.length;
-      if (size > 16_000) break;
-      selectedRows.unshift(rows[i]);
-      result.unshift({ role: rows[i].role, content: rows[i].content });
-    }
-    while (result[0]?.role === "assistant") {
-      result.shift();
-      selectedRows.shift();
-    }
+    const selectedRows = boundedConversationRows(rows, messageId);
+    const result: ConversationMessage[] = selectedRows.map((row) => ({
+      role: row.role,
+      content: row.content,
+    }));
     const media = (
       await this.pool.query(
         "SELECT id,kind,message_id FROM attachments WHERE user_id=$1 AND message_id=ANY($2::uuid[]) ORDER BY created_at,id",
@@ -296,6 +369,7 @@ export class PostgresConversations implements ConversationStore {
     request: UnifiedRequest,
     text: string,
     sources: ResearchSource[] = [],
+    artifacts: ArtifactReference[] = [],
   ) {
     return this.finish(request, async (client) => {
       const result = await client.query(
@@ -303,6 +377,11 @@ export class PostgresConversations implements ConversationStore {
         [request.conversationId, request.userId, request.requestId, text],
       );
       const id = result.rows[0].id as string;
+      for (const a of artifacts)
+        await client.query(
+          "INSERT INTO message_artifacts(user_id,message_id,artifact_id) SELECT $1,$2,id FROM artifacts WHERE user_id=$1 AND id=$3 ON CONFLICT DO NOTHING",
+          [request.userId, id, a.id],
+        );
       for (const source of sources)
         await client.query(
           "INSERT INTO research_sources(user_id,message_id,source_key,url,title,kind,retrieved_at,published_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
@@ -327,8 +406,12 @@ export class PostgresConversations implements ConversationStore {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+        [request.userId],
+      );
       const row = await client.query(
-        "UPDATE messages SET status='complete',completed_at=now() WHERE id=$1 AND user_id=$2 AND conversation_id=$3 AND request_id=$4 AND status='running' RETURNING id",
+        `UPDATE messages SET status='complete',completed_at=now() WHERE id=$1 AND user_id=$2 AND conversation_id=$3 AND request_id=$4 AND status='running' AND EXISTS(SELECT 1 FROM "user" u WHERE u.id=$2 AND NOT u.processing_paused) RETURNING id`,
         [
           request.messageId,
           request.userId,

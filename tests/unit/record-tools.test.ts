@@ -13,7 +13,13 @@ const services: RecordServices = {
     update: change,
     forget: change,
   },
-  items: { find: async () => [], save: change, update: change, remove: change },
+  items: {
+    inspect: async () => null,
+    find: async () => [],
+    save: change,
+    update: change,
+    remove: change,
+  },
 };
 it("builds provider-compatible schemas without URI or dynamic object fields", () => {
   const tools = recordTools(
@@ -29,7 +35,7 @@ it("builds provider-compatible schemas without URI or dynamic object fields", ()
     "Save this idea",
     () => {},
   );
-  expect(tools).toHaveLength(8);
+  expect(tools).toHaveLength(11);
   for (const tool of tools) {
     const schema = JSON.stringify(tool.parameters);
     expect(schema).not.toContain('"format":"uri"');

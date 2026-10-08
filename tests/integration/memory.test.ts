@@ -31,6 +31,21 @@ beforeAll(async () => {
   ])
     await pool.query(await readFile(`apps/web/migrations/${file}`, "utf8"));
   await pool.query(
+    await readFile("apps/web/migrations/0006_validation.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0007_telegram.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0008_life_state.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0009_followups.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0010_artifacts.sql", "utf8"),
+  );
+  await pool.query(
     `INSERT INTO "user"(id,name,email) VALUES('alice','Alice','memory-alice@test.invalid'),('bob','Bob','memory-bob@test.invalid')`,
   );
   chat = new PostgresConversations(pool);
@@ -382,4 +397,9 @@ it("suppresses answers that previously recalled a corrected or forgotten fact", 
     after.request.messageId,
   );
   expect(clean.map((m) => m.content).join("\n")).not.toMatch(/quiet|lively/);
+  expect(
+    JSON.stringify(
+      await chat.recallHistory("alice", recall.request.conversationId),
+    ),
+  ).not.toMatch(/quiet|lively/);
 });

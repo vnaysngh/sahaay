@@ -1,3 +1,4 @@
+export type ArtifactReference = { id: string; title: string };
 export type ResearchSource = {
   id: string;
   url: string;
@@ -7,6 +8,7 @@ export type ResearchSource = {
   publishedAt: string | null;
 };
 export type ProviderEvent =
+  | { type: "artifacts"; artifacts: ArtifactReference[] }
   | { type: "researching" }
   | { type: "record_changes"; operations: string[] }
   | { type: "sources"; sources: ResearchSource[] };
@@ -26,6 +28,7 @@ export type UnifiedRequest = {
     | { type: "image" | "audio"; attachmentId: string }
   >;
   receivedAt: string;
+  channel?: "web" | "telegram";
   responseLanguage?: string;
 };
 export type ResponseEvent =
@@ -34,6 +37,7 @@ export type ResponseEvent =
       messageId: string;
       stage: "thinking" | "understanding" | "transcribing" | "researching";
     }
+  | { type: "artifacts"; artifacts: ArtifactReference[] }
   | { type: "sources"; sources: ResearchSource[] }
   | { type: "delta"; text: string }
   | { type: "complete"; messageId: string; text: string }
@@ -58,6 +62,7 @@ export interface ConversationStore {
     request: UnifiedRequest,
     text: string,
     sources?: ResearchSource[],
+    artifacts?: ArtifactReference[],
   ): Promise<string | null>;
   fail(request: UnifiedRequest, code: string): Promise<void>;
 }

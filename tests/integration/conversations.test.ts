@@ -37,6 +37,21 @@ beforeAll(async () => {
     await readFile("apps/web/migrations/0005_record_context.sql", "utf8"),
   );
   await pool.query(
+    await readFile("apps/web/migrations/0006_validation.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0007_telegram.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0008_life_state.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0009_followups.sql", "utf8"),
+  );
+  await pool.query(
+    await readFile("apps/web/migrations/0010_artifacts.sql", "utf8"),
+  );
+  await pool.query(
     `INSERT INTO "user" (id,name,email) VALUES ('alice','Alice','alice@test.invalid'),('bob','Bob','bob@test.invalid')`,
   );
   db = new PostgresConversations(pool);
@@ -49,6 +64,38 @@ afterAll(async () => {
   }
 });
 describe("PostgreSQL ownership and request lifecycle", () => {
+  it("recalls retained owned threads across conversations without exposing foreign or expired history", async () => {
+    const conversation = await db.create("alice");
+    const begun = await db.begin("alice", {
+      conversationId: conversation.id,
+      requestId: crypto.randomUUID(),
+      text: "Discussed camera lenses",
+    });
+    if (begun.duplicate) throw Error("unexpected duplicate");
+    await db.complete(begun.request, "Compared focal lengths");
+    const result = await db.recallHistory("alice", conversation.id);
+    expect(JSON.stringify(result)).toContain("camera lenses");
+    expect(result.retentionDays).toBe(7);
+    expect(
+      (await db.recallHistory("bob", conversation.id)).conversations,
+    ).toEqual([]);
+    await pool.query(
+      "UPDATE messages SET created_at=now()-interval '8 days' WHERE conversation_id=$1",
+      [conversation.id],
+    );
+    expect(
+      (await db.recallHistory("alice", conversation.id)).conversations,
+    ).toEqual([]);
+    await pool.query(
+      "UPDATE \"user\" SET processing_paused=true WHERE id='alice'",
+    );
+    await expect(db.recallHistory("alice", null)).rejects.toMatchObject({
+      status: 403,
+    });
+    await pool.query(
+      "UPDATE \"user\" SET processing_paused=false WHERE id='alice'",
+    );
+  });
   it("isolates conversation history and prevents foreign writes even at the FK", async () => {
     const conversation = await db.create("alice");
     expect(await db.list("bob")).not.toContainEqual(

@@ -45,3 +45,11 @@ Launch requires all P0 modalities, five verbs, language behavior, useful follow-
 ## Discovery metrics
 
 Track request category, modality, language bucket, completion/partial/failure, clarification/correction, repeat usage, explicit save/recall and coarse unsupported-action intent. Measure source grounding, cross-user isolation and duplicate mutation rate. Analyze aggregate repeat demand, not raw sensitive prompts or automatically inferred persona labels. No behavioral prediction platform.
+
+## Approved post-MVP extension: M6 Personal Life State
+
+M0–M5 remain the completed MVP baseline. M6 adds natural current-user organizational declarations, persistent plan/project objects and related saved items using the same owned core across Web and Telegram. Explicit preferences remain memories; saved candidates/ideas/purchases remain items; temporary conversation context remains separate. A minimal My state Web view makes accumulated state visible. Partial dates and tentative intent are preserved without inventing precision. M6 does not passively store all messages or recategorize old records. M7–M10 (Inbox/proactivity, evidence-chosen Skill, first external action and eventual Autopilot) are future direction, not authorized implementation in this milestone.
+
+## M6.5 amendment — Documents / Personal Artifacts
+
+Images may now be explicitly kept as user-owned Documents, separate from memory, saved items, personal state and conversation context. Normal conversational images remain temporary. The shared Web/Telegram agent supports natural keep/list/field-answer/original-return/delete requests; Web adds a minimal Documents surface. Exact received originals and extracted understanding are privately encrypted in PostgreSQL. Optional owned state references remain lightweight. Ambiguous sensitive retrieval requires narrowing. Only image Artifacts are included; PDFs/audio/video artifact storage, sharing, folders, OCR services and new datastores remain deferred. Independent processor/Telegram copies and bounded encrypted backup retention are disclosed. See M6.5 in IMPLEMENTATION_PLAN.md and ARCHITECTURE.md for implementation and key-recovery requirements.

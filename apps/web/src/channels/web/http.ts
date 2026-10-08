@@ -1,9 +1,17 @@
+import { verificationRequired } from "../../auth/email";
+import { getPool } from "../../db";
 import { getAuth } from "../../auth";
 import { trustedOrigins } from "../../config";
 import { RequestError } from "../../core/validation";
 export async function requireUser(request: Request) {
   const session = await getAuth().api.getSession({ headers: request.headers });
   if (!session) throw new RequestError(401, "unauthorized", "Please sign in.");
+  if (verificationRequired() && !session.user.emailVerified)
+    throw new RequestError(
+      403,
+      "verify_email",
+      "Please verify your email before continuing.",
+    );
   return session.user;
 }
 export function requireOrigin(request: Request) {
@@ -43,4 +51,18 @@ export function errorResponse(error: unknown) {
     { error: "Sahaay is temporarily unavailable.", code: "unavailable" },
     { status: 503 },
   );
+}
+
+export async function requireProcessing(owner: string) {
+  const row = (
+    await getPool().query('SELECT processing_paused FROM "user" WHERE id=$1', [
+      owner,
+    ])
+  ).rows[0];
+  if (!row || row.processing_paused)
+    throw new RequestError(
+      403,
+      "paused",
+      "Your assistant is paused. Resume it in Privacy to continue.",
+    );
 }

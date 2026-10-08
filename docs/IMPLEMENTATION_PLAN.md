@@ -1,6 +1,6 @@
 # Sahaay MVP Implementation Plan
 
-**Updated:** 2026-10-04 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 implemented locally; M3 authorized by “go ahead with m3” and implemented locally. M4 memory decision and schema/interfaces approved on 2026-10-05; M4 implemented locally, with M5 remaining.
+**Updated:** 2026-10-05 (Asia/Kolkata). **Status:** Web Chat pivot directed by the user. M1 completed locally; M2 implemented locally; M3 authorized by “go ahead with m3” and implemented locally. M4 memory decision and schema/interfaces approved on 2026-10-05; M4 and M5 implemented locally. Tester launch remains gated on deployment/email/operations and processor review.
 
 ## NEEDED FOR MVP — scope and architecture
 
@@ -12,11 +12,11 @@ P0: text, images/screenshots, voice recordings/uploads and URLs in normal messag
 
 Keep Next.js 16, TypeScript, Node.js, PostgreSQL, Drizzle/pg, Better Auth, one OpenAI Agents SDK agent with Responses, OpenAI vision/search, Sarvam as the pilot-selected transcription default, and Sahaay-owned SQL memory/items. Pin compatible patches during M1. Use small modules inside one app; split packages only when useful. No dashboard, extra providers, agent framework or additional services.
 
-Meta Cloud API work and existing probes are paused and preserved. Account restriction debugging, incorporation, Business Verification and WhatsApp eligibility do not block Web Chat. No Meta/Twilio/Telegram adapter implementation now.
+Meta Cloud API work and existing probes are paused and preserved. Account restriction debugging, incorporation, Business Verification and WhatsApp eligibility do not block Web Chat. Telegram is now explicitly approved as a thin adapter; Meta/Twilio remain deferred.
 
 ## Verification conventions
 
-M1/M2 paths and verification scripts now exist; later milestone paths remain planned. Each milestone creates the scripts/suites it uses; test commands must fail for missing suites. Provider mocks verify application behavior; separately authorized live checks establish provider behavior. Never load real credentials in normal unit tests or log them. Common checks after each implementation milestone: `npm run lint`, `npm run typecheck`, `npm run build`.
+M0–M5 app paths and verification scripts now exist. Each milestone creates the scripts/suites it uses; test commands must fail for missing suites. Provider mocks verify application behavior; separately authorized live checks establish provider behavior. Never load real credentials in normal unit tests or log them. Common checks after each implementation milestone: `npm run lint`, `npm run typecheck`, `npm run build`.
 
 M1 introduces `npm ci`, `npm run dev`, `npm run db:migrate`, `npm run db:migrate:check`, `npm test` (Vitest) and `npm run test:web` (Playwright). PostgreSQL is the only datastore: use one available local installation or a development managed database selected in M0. Docker is optional, not a blocker if another PostgreSQL connection is available. Deployment provisioning is not required for local M1 acceptance.
 
@@ -92,7 +92,7 @@ M1 introduces `npm ci`, `npm run dev`, `npm run db:migrate`, `npm run db:migrate
 
 **Acceptance criteria:** Current research and public-page understanding return grounded answers and clickable sources, or honest limitations. Processing state is visible. Never claim an inaccessible page/video was inspected; no added search provider absent approval and evidence.
 
-**Local implementation:** The single SDK agent invokes one small argument-free public research tool, backed by OpenAI hosted search using the configured model. Only the current public question and eligible explicitly referenced prior user URLs enter that tool; private history/images are excluded. Clarify missing public details for image-based research. Reject private/credential-bearing and document URLs; do not infer video access. At most one research invocation, four hosted search/open actions, 90 seconds for research and 180 seconds for the overall response. Actual annotations become verified inline links; consulted pages are separately labelled. Source records commit with the final assistant message and expire with its 7-day retention; publication time stays unknown unless supplied. No local page fetcher/crawler or additional service. Focused live comparison, public-URL and PDF-limit checks passed; this is not a broad factual-accuracy guarantee.
+**Local implementation:** The single SDK agent supplies a standalone public query derived from conversation context to a structured research function tool. An SDK input guardrail checks privacy and conversational intent with the same primary provider before execution; only its approved query enters hosted search, not private history/images. Clarify genuinely missing or ambiguous details; no special-case follow-up regex routing. Postgres history remains authoritative and recent complete turns survive bounded context selection. Reject private/credential-bearing and document URLs; do not infer video access. At most one research invocation, four hosted search/open actions, 90 seconds for research and 180 seconds for the overall response. Actual annotations become verified inline links; consulted pages are separately labelled. Source records commit with the final assistant message and expire with its 7-day retention; publication time stays unknown unless supplied. No local page fetcher/crawler or additional service. Focused live comparison, public-URL and PDF-limit checks passed; this is not a broad factual-accuracy guarantee.
 
 **Commands required to verify:** `npm run db:migrate`; `npm test`; `npm run test:integration`; `npm run test:web`; common checks. Opt-in live check: `npm run test:live-research` (requires configured OpenAI access and the local app; only public fixtures, disposable account removed).
 
@@ -139,10 +139,172 @@ Each slice uses existing app modules and PostgreSQL; common lint/type/build chec
 
 **Acceptance criteria:** All P0 inputs and five verbs work with useful context, sourced research and controllable owned memory/items. Initial testers can use the conversation window and history, understand processing/errors and delete their data. Hosting/processor/auth/backup requirements satisfied. P1 and paused channels are excluded from launch gates.
 
-**Commands required to verify:** `npm ci`; `npm run db:migrate`; common checks; `npm test`; `npm run test:web`; `npm run eval:mvp`; `npm run test:restore`; `npm run test:provider -- --suite mvp`; `npm run release:check`.
+**Commands required to verify:** `npm ci`; `npm run db:migrate`; common checks; `npm test`; `npm run test:web`; `npm run eval:mvp`; `npm run test:restore`; `npm run test:integration`; `npm run release:check -- --local`; `npm run release:check`. Production-bundle verification locally uses `SAHAAY_LOCAL_PREVIEW=1 npm run build`; normal deployed builds require HTTPS, SMTP and verified database TLS.
+
+
+**Local M5 implementation:** Compact Privacy controls pause/resume processing, delete the current/all conversations and delete the account with current password plus DELETE confirmation. Chat deletion preserves separately saved memories/items; account deletion cascades both, sessions and identifiable events. Cancellation and PostgreSQL lifecycle checks reject late completions/mutations. Email verification, single-use password recovery, session revocation and database-backed auth rate limits use Better Auth. Production refuses synthetic bypasses, missing SMTP or unverified database TLS. No dashboard or new datastore.
+
+Product discovery stores only constrained capability/modality/language/outcome/unsupported-target enums; voice is classified transiently from its owned transcript. Events expire in 30 days, conversation/transcript content in 7 days, raw media in 24 hours. Explicit persistence refuses credentials/OTPs/sensitive identity identifiers; this conservative rule is not comprehensive PII detection. Ordinary explicitly supplied project prices remain permitted.
+
+Encrypted database backup/restore commands use native PostgreSQL clients and AES-GCM. Raw media is excluded. A private fsynced deletion ledger survives database snapshots for 31 days; restore requires the matching ledger and a new empty database while the app is offline. Restored sessions/verification tokens are removed and credential passwords cleared, requiring password reset. Deleted records/source answers/accounts are suppressed before exposing the restored database. Recovery tests include a real pg_dump → encrypt/decrypt → pg_restore round trip, not only mocked SQL.
+
+**Remaining tester launch work:** Configure a public HTTPS host, verified-TLS PostgreSQL, private durable media/deletion-ledger volume and restricted reverse proxy that overwrites forwarded IP headers. Configure SMTP_HOST/PORT/USER/PASSWORD/FROM, verify actual verification/reset email delivery, then set SAHAAY_EMAIL_DELIVERY_VERIFIED=1. Generate a private 32-byte hexadecimal SAHAAY_BACKUP_KEY outside version control, retain it securely, schedule daily backup:create and keep the matching ledger independently recoverable; run a recovery drill on the actual deployment and set SAHAAY_OPERATIONS_VERIFIED=1 only afterwards. Review actual OpenAI/Sarvam account processing/retention terms and tester disclosure, then set SAHAAY_PROCESSORS_REVIEWED=1. These flags record operator checks; they are not automatic proof or deployment authorization. release:check fails until configured. No tester invitations/public deployment performed.
+
+**Operating commands:** PostgreSQL 17-compatible pg_dump/pg_restore must be on PATH or configured through PG_DUMP_BIN/PG_RESTORE_BIN. Run npm run backup:create with DATABASE_URL, backup key and private ledger configured. To restore, stop the app, set SAHAAY_RESTORE_OFFLINE=1 and SAHAAY_RESTORE_DATABASE_URL to a new empty database, then run npm run backup:restore -- /absolute/path/backup.sahaay.enc. Review the resulting database and reset-email access before switching DATABASE_URL; never restore over the active database. Keep backups/ledger on protected durable storage, purge expired backups during scheduled backup runs, and remove .env.local from deployment artifacts.
+
+**Verification:** 26 unit tests, 22 PostgreSQL integration tests (including native encrypted backup restoration) and 14 browser journeys pass via npm run eval:mvp. Lint/type checks, migration currency and loopback production build pass. An encrypted private local database backup was created; deployed backup scheduling/recovery is still pending.
+
+**Evaluation limits:** Deterministic browser journeys cover text/context/history, image follow-up, voice upload/capture controls, URL research/sources, separate memory/item lifecycle and privacy/auth flows. Hardware capture is synthetic in automated tests; manually check a real microphone on tester browsers. Existing consented live English/Hindi voice and live English/Hindi memory/research evidence is retained. Genuine Hinglish voice remains deferred by the user. Provider mocks and these focused live checks do not establish general language/research accuracy; initial tester validation remains observational work after deployment.
+
+
+## T1 — Telegram testing adapter (approved after M5)
+
+**Objective:** Use the same assistant through private Telegram messages while retaining Web Chat.
+
+**Files/packages affected:** 0007_telegram.sql/schema; channels/telegram; shared core/runtime extracted from the Web route; authenticated Telegram bridge/link routes; compact account-link page; scripts/telegram.ts; Telegram unit/integration/browser regressions. PostgreSQL remains the only datastore.
+
+**Dependencies:** M1–M5; a BotFather bot/token/username for live delivery. Fake transport tests do not need a live bot or provider calls.
+
+**Implementation steps:** (1) Extract shared runtime and verify Web regressions. (2) Add hashed single-use linking to existing canonical accounts with isolation/expiry tests. (3) Normalize text/image/voice/URL transport into existing owned inputs and test shared context, memories/items and research. (4) Render stage edits/final source links; deduplicate updates and handle uncertain delivery without replaying tools. (5) Reuse privacy controls/cancellation and verify unlink/delete/restore revocation. (6) Configure the bot and run a small live private-chat check; do not register a webhook or invite testers implicitly.
+
+**Tests:** Stable request IDs; hashed single-use/expired links; takeover rejection and two-user isolation; shared memory/items and Web history; URLs/source attribution; owned image/audio pipeline; forwarded-content authorization; ignored groups/bots; P1 rejection; pause/resume; duplicate delivery and uncertain sends; safe output/file download boundaries; restore unlink; Web sign-in/link/origin/bridge-auth regressions.
+
+**Acceptance criteria:** One shared core and datastore; linked private Telegram conversations support P0 modalities and existing five verbs; final responses/sources arrive without partial-message spam; Web Chat remains functional. Bot credentials stay private. No extra product capabilities or infrastructure. Local mocked transport tests establish application behavior; actual Telegram delivery still requires bot configuration and a live check.
+
+**Commands required to verify:** npm run db:migrate; npm run lint; npm run typecheck; npm run eval:mvp; SAHAAY_LOCAL_PREVIEW=1 npm run build for local bundle verification. Run npm run dev and npm run telegram:dev in separate terminals; sign in to /connect/telegram, create/open the link and test one text, image, direct voice and sourced research request. Test /new, /pause, /resume and shared recall. Never paste the bot token into chat.
 
 ## DEFER UNTIL VALIDATED
 
-WhatsApp/Meta, Twilio and Telegram adapters; Meta restriction debugging, incorporation and Business Verification; PDFs/documents/location; settings/memory dashboards; Temporal, Redis, vector/graph databases, Gmail/Calendar/Contacts, Composio, Mem0/Supermemory, extra research providers/crawlers, multi-agent/model routing, custom frameworks, Autopilots/monitoring, reminders/invoices, payments/bookings and other external actions.
+WhatsApp/Meta and Twilio adapters; Meta restriction debugging, incorporation and Business Verification; PDFs/documents/location; settings/memory dashboards; Temporal, Redis, vector/graph databases, Gmail/Calendar/Contacts, Composio, Mem0/Supermemory, extra research providers/crawlers, multi-agent/model routing, custom frameworks, Autopilots/monitoring, reminders/invoices, payments/bookings and other external actions.
 
 M0 decisions and revised plan were shown; the user authorized M1 on 2026-10-04. Local PostgreSQL 17 runs through the repo-local development launcher (no Docker/system service); Better Auth email/password is configured for local sign-in, with verified email/recovery required before testers. M1 is the first usable browser conversation; M2 completes P0 multimodal understanding. The pivot simplifies the channel, not the product scope.
+
+## M6 — Personal Life State (current post-MVP milestone)
+
+**Objective:** Make personal plans, ideas, purchases and candidates accumulate as inspectable owned state across Telegram and Web. M7–M10 are direction only, not this build.
+
+**Smallest model:** Extend saved_items with immutable item/object role, an optional owned parent object, and a descriptive state label. Reuse flat attributes, lifecycle, provenance and receipt machinery. Keep memories and conversation context separate. No historical recategorization.
+
+### M6.1 — Typed state and safe persistence
+
+- **Files/packages:** 0008_life_state.sql, db/schema, core/items and memory interfaces, db/items, record-mutations, events, privacy summary. Existing PostgreSQL/pg/Drizzle only.
+- **Dependencies:** M4 records, M5 ownership/retention/restore journal, T1 canonical Telegram linking.
+- **Steps:** Add defaulted fields and same-owner one-level parent constraints; preserve legacy inputs; extend search by role/parent/state; reuse versions, receipts and item deletion evidence; keep children when an object is deleted; append content-free lifecycle flags.
+- **Tests:** Isolated real PostgreSQL schema; migration defaults; cross-owner/invalid/nested parents; immutable role; concurrent stale changes; replay; pause during review; voice authorization; source expiry; delete/restore suppression and account cascade.
+- **Acceptance:** Existing saved items stay items. A plan and its linked items have the same internal owner, remain after chat expiry, and cannot be restored after deletion.
+- **Verify:** `npm run test:integration`; `npm run typecheck`; `npm run db:migrate`; `npm run db:migrate:check`.
+
+### M6.2 — Natural organization in the existing agent
+
+- **Files/packages:** providers/record-tools, item-intent, openai, core/runtime; existing Agents SDK and OpenAI client. No new framework/provider.
+- **Dependencies:** M6.1 and existing unified context/media pipeline.
+- **Steps:** Expose roles/parents/state through existing item tools; search before object creation; resolve referents from working conversation and owned records; authorize current natural self-organizational declarations with a bounded semantic policy; reject quoted/forwarded/hypothetical/ambiguous intent and preference misclassification; report persistence only after tool success. Coarse unsupported-action reporting records demand without executing it.
+- **Tests:** Real-agent opt-in evaluation using invented data only; Japan plan → hotel from another channel/thread → plan recall; purchase amount/currency; considering a laptop; explicit preference; negative quoted request; natural video idea; state update; unsupported shopping action; object deletion retaining child. Unit policy failure/malformed-result tests and SQL transaction rechecks.
+- **Acceptance:** No special commands/domain agents; the same core tools work from both adapters; no new memory appears for a hotel/plan merely because it was saved. Failures never claim uncommitted state.
+- **Verify:** `npm run test:live-state` (uses configured OpenAI key and synthetic isolated schema, simulated Telegram sends); `npm test`; `npm run test:integration`.
+
+### M6.3 — Minimal personal-state surface
+
+- **Files/packages:** app/state/page, db/life-state, chat header, existing CSS and privacy disclosure. Next/React already installed.
+- **Dependencies:** M6.1–M6.2, existing authenticated Web app.
+- **Steps:** Add My state navigation; paginate objects/ungrouped items; open related items; show attributes/state/update date and separate explicit memories; retain chat and Telegram linking; perform edits through natural chat.
+- **Tests:** Browser creates a plan and hotel, inspects object details, reloads and returns to chat; ownership/unknown object tests; existing auth and mobile/chat/media/privacy journeys remain intact.
+- **Acceptance:** State is visible outside history; no large dashboard, menu-driven Telegram bot or duplicate state-management service. New records show after navigation/reload.
+- **Verify:** `npm run test:web`; `npm run lint`; `npm run typecheck`; `SAHAAY_LOCAL_PREVIEW=1 npm run build`.
+
+### M6.4 — Review and dogfooding handoff
+
+- **Files/packages:** Existing tests, synthetic evaluation script, architecture/security/plan docs only as needed.
+- **Dependencies:** M6.1–M6.3 pass; tested migration applied locally and shared bridge host updated.
+- **Steps:** Audit persistence semantics, privacy and adapter reuse; run complete relevant regressions and live synthetic cases; report verification limits and local entry point. Founder/tester usage follows; no M7 implementation.
+- **Acceptance:** Japan scenario works across channels and is inspectable on Web. Ordinary nonorganizational requests are not passively saved. No added infrastructure, future execution or proactivity. Existing deployment/SMTP/backup/processor gates still apply before public testers.
+- **Verify:** All preceding commands. Live checks are evidence for tested cases, not a guarantee of perfect intent/reference/language recognition.
+
+**M6 verification (local):** 39 unit checks, 36 PostgreSQL integration checks and 16 browser journeys pass. Typecheck, lint and local production build pass. The complete 11-case real OpenAI evaluation and three additional Hindi/Hinglish checks passed using invented inputs in an isolated schema and simulated Telegram delivery; no real user history was exported and no Telegram messages sent by the evaluation. Additional language verification: `npm run test:live-state -- --language-only` covers Hindi natural project creation/cross-conversation recall and a typed Hinglish idea; it does not add new Hinglish voice accuracy evidence. Early live runs exposed unnecessary date clarification/inconsistent object retrieval; the final design preserves partial dates and provides named object lookup plus aggregate object/child inspection. This is tested-case evidence, not a guarantee of arbitrary reference or language accuracy. Migration 0008 is applied locally. Hosted deployment/tester gates from M5 remain unchanged; M7–M10 are deferred.
+
+## M7 — Inbox + Controlled Follow-ups (2026-10-06)
+
+M0–M6 remain supported. This amendment authorizes M7 only. M8 is **First Connected Capability**, chosen after dogfooding; M9 consequential actions and M10 Autopilots remain unimplemented.
+
+**Model and reuse:** One new `followups` table, separate from memories, saved items and conversation context; an optional same-owner saved-item/object relationship. A nullable confirmed IANA timezone on the existing user. Reuse the canonical Web/Telegram identity, unified request/core, record authorization policy, owner locks, mutation receipts, version checks, deletion journal, existing Node process and Telegram transport. No historical data conversion, new agent, infrastructure or workflow engine.
+
+### M7.1 — Persistent lifecycle and authorization
+
+- **Objective:** Create/update/cancel/complete explicitly requested one-off reminders across channels.
+- **Files/packages:** `0009_followups.sql`, `core/followups`, `db/followups`, schema, record mutations, provider tools/policy, shared runtime; existing pg/Zod/Agents SDK.
+- **Dependencies:** M6 state and M5 ownership/retention controls.
+- **Steps:** Add separate lifecycle and delivery states, UTC scheduling plus timezone, reason/provenance, versions/receipts. Resolve related state through existing tools; bound reminder lookup and include active reminders in object inspection. Convert local times deterministically; reject missing timezone, ambiguous/invalid clock-change times, vague dates and past times. A date on state alone creates no reminder. Deleting a parent or related item cancels associated active reminders; deleting chats preserves separately requested reminders.
+- **Tests:** Ownership, policy denial, source-expiry replay, stale versions, UTC conversion/DST, related parent/child deletion, paused mutation and restore suppression. Live invented-data evaluation for natural corrections, Hindi, quoted instructions and timezone clarification.
+- **Acceptance:** Natural requests create one owned reminder; corrections update it; cancelled reminders cannot deliver. No recurrence, monitoring or future agent execution.
+- **Verify:** `npm test`; `npm run test:integration`; `npm run test:live-followups`; `npm run typecheck`; `npm run db:migrate`; `npm run db:migrate:check`.
+
+### M7.2 — Durable Inbox readiness and bounded delivery
+
+- **Objective:** Bring explicit reminders back without duplicates on retry/restart.
+- **Files/packages:** `core/followup-worker`, Telegram follow-up notifier, existing Next instrumentation. Existing PostgreSQL and Node process only.
+- **Dependencies:** M7.1; linked verified identity and configured bot for Telegram notification.
+- **Steps:** Poll every 30 seconds, promote due items to ready, commit a send intent before network I/O, recheck consent/identity/version under the owner lock, record delivery result. Safe Telegram 429 rejection retries with backoff, maximum three attempts. Unknown/network/5xx/crash outcomes become uncertain and are never automatically resent; terminal failures remain in Web Inbox. Serialize cancellation/privacy with delivery. Skip paused users; resume catches up. Restore cancels active snapshot reminders and revokes channel links, requiring fresh user intent. Closed reminders expire after 30 days.
+- **Tests:** Restart before due, concurrent workers, unknown sends/stale committed attempts, safe retry bounds, pause/unlinked/unverified users, cancellation before dispatch, no fabricated delivery without transport, backup restore.
+- **Acceptance:** Persistent Inbox does not depend on Telegram. A successful send is recorded once; uncertain sends are clearly labeled. Exactly-once Telegram transport is not promised. Cancellation cannot recall an already-started send. Delivery is at poll granularity while running, and late after downtime; hosting must keep this existing Node process alive (a sleeping laptop/serverless request-only host cannot meet timely delivery).
+- **Verify:** `npm run test:integration -- tests/integration/followups.test.ts`; `SAHAAY_LOCAL_PREVIEW=1 npm run build`; `npm run dev` or `npm run start` after migration. No separate scheduler service required.
+
+### M7.3 — Minimal Web Inbox and privacy-conscious demand
+
+- **Objective:** Inspect Today/Upcoming follow-ups and act consistently across channels; learn unsupported capability demand.
+- **Files/packages:** `app/inbox`, `app/api/inbox`, Inbox component/CSS, chat/state navigation, existing privacy page, product events/discovery/tool schemas.
+- **Dependencies:** M7.1–M7.2 and existing authenticated Web app.
+- **Steps:** Confirm timezone, display scheduling/delivery explanation, expose Open/Done/Dismiss/Reschedule/Cancel, keep closed items inspectable. Reuse shared SQL lifecycle; no dashboard or Telegram menus. Store lifecycle flags and normalized unsupported category/capability/channel only; ordinary reminders are no longer mislabeled unsupported calendar actions. Extend the capability allowlist in code as real demand emerges, never use private prompt content as a capability label.
+- **Tests:** Verified browser account creates in chat, inspects/reschedules/opens/dismisses, checks the same core state; responsive layout, auth/CSRF, existing Web/Telegram/media/state/privacy regressions. Synthetic Telegram Flow A–F exercises the real shared core/SQL with fake transport; live provider evaluation tests interpretation separately.
+- **Acceptance:** Visible accumulation independent of chat history; unsupported monitoring logs demand and creates no job. Existing Web/M6 UI continues working. No M8 capability selected.
+- **Verify:** `npm run test:web`; `npm run lint`; `npm run typecheck`; complete relevant integration/unit/live evaluation and local production build.
+
+Internal capability-demand query (operator SQL, no public route/dashboard; 30-day event retention; suppress small cohorts before sharing):
+
+```sql
+SELECT unsupported_category AS category, unsupported_capability AS capability,
+       channel, count(*) AS requests, count(DISTINCT user_id) AS users
+FROM product_events
+WHERE 'unsupported_action'=ANY(behaviors) AND unsupported_capability IS NOT NULL
+GROUP BY unsupported_category, unsupported_capability, channel
+ORDER BY requests DESC;
+```
+
+Dogfood M7 before choosing M8. Hosting, SMTP and backup/processor gates from M5 still apply before inviting public testers.
+
+**M7 local verification:** Migration 0009 applied and checksum check passes. 41 unit checks, 49 isolated PostgreSQL checks and 17 browser journeys pass; the final Inbox/Open/CSRF and delivery/cancel race checks were rerun after the audit fix. Typecheck, lint and local production build pass. Nine live OpenAI cases passed with invented accounts, an isolated schema and simulated Telegram transport, including natural correction/cancellation, cross-channel object recall, unknown timezone, monitoring refusal, quoted intent and Hindi reminders. Desktop/mobile Inbox screenshots were inspected. Actual timed Telegram delivery remains a dogfooding check on the configured bot; no real recipients received synthetic test notifications. Local Inbox route is available with authentication. Confirm timezone in Inbox and keep the existing Node server running before testing a real reminder. M8–M10 remain deferred.
+
+## M6.5 — Personal Artifacts (images only)
+
+### M6.5.1 — Private original retention and owned service
+
+- **Objective:** Explicitly retain an image original independently of chats while preserving the memory/item/state distinction.
+- **Files/packages:** Migration 0010, schema, core/artifacts, db/artifacts, existing attachments/files, media/artifact-crypto, privacy restore/journal; built-in Node crypto, existing PostgreSQL only.
+- **Dependencies:** Current authentication, canonical channel identity, image validation, owned mutation policy/receipts and deletion ledger.
+- **Steps:** Preserve/encrypt received bytes and normalized previews temporarily; promote only explicit keep requests. Add generic summaries, encrypted understanding and optional owned state reference. Bound count/bytes/search. Implement owned create/get/search/original/delete, replay/version checks, audit flags and restore suppression. Configure independent private encryption key; retain 24-hour ordinary images and independent durable Documents.
+- **Tests:** Byte equality, wrong-owner read/promotion/delete, encryption tamper/cross-owner binding, temporary expiry, legacy re-upload, chat/account deletion, state detach, idempotency and restored-deletion suppression.
+- **Acceptance:** No automatic artifacts or memories; private durable original survives chat expiry; unauthorized operations fail at the service; deletion removes active originals/extraction/copies and suppresses source context.
+- **Verify:** `npm run test:integration`; `npm test`; `npm run db:migrate`; `npm run db:migrate:check`.
+
+### M6.5.2 — One agent and two thin transports
+
+- **Objective:** Natural keep/list/field-answer/original-return/delete across Web and Telegram.
+- **Files/packages:** Existing provider/core/record policy/runtime, providers/artifact-tools, conversation response references, Telegram API/adapter; existing OpenAI Agents SDK vision.
+- **Dependencies:** M6.5.1, same linked internal user and existing multimodal input.
+- **Steps:** Expose explicit artifact operations separately from memory/items. Use initial image understanding; re-examine an owned original through native image tool output when extraction lacks a requested field. Keep evidence untrusted and private from public research. Narrow ambiguous targets. Send at most three original files per request without recompression; persist references for Web history.
+- **Tests:** Synthetic Aadhaar storage, new-conversation address, exact original return, Telegram→Web and Web→Telegram, generic listing, ambiguous invoices, quoted intent refusal, deletion, no extracted-field memories and missing-field image fallback.
+- **Acceptance:** Users identify documents by meaning, not filenames/IDs; extraction never substitutes for an original, ambiguity never silently selects sensitive media. Existing channel/core behavior stays intact.
+- **Verify:** `npm run test:integration`; `npm run test:live-artifacts`; `npm run typecheck`; `npm run lint`.
+
+### M6.5.3 — Documents surface and validation
+
+- **Objective:** Inspect/download/delete owned Documents without a file manager or dashboard expansion.
+- **Files/packages:** /documents, authenticated Documents APIs, minimal component/CSS/nav, existing chat, privacy disclosure/env example/release checks and browser tests.
+- **Dependencies:** M6.5.1–2 and working Web authentication.
+- **Steps:** Show generic summaries; open original preview and selected extraction; offer original download and confirmed deletion. Enforce ownership/origin/cache headers. Disclose durable retention, processor copies and backup/key recovery. Test desktop/mobile and existing Web flows.
+- **Tests:** Authenticated exact-byte downloads, cross-account denial, cross-origin deletion denial, durable deletion, useful metadata, responsive preview and full Web regression suite.
+- **Acceptance:** Telegram-kept images appear on Web; Web-kept images are retrievable on Telegram through the shared account. Plain summaries expose no unnecessary sensitive values; no public links or unsupported media.
+- **Verify:** `npm run test:web`; `SAHAAY_LOCAL_PREVIEW=1 npm run build`; `npm run release:check -- --local`.
+
+No subsequent milestone or speculative media infrastructure is included in M6.5. Real Telegram delivery remains a founder dogfooding check; automated transport tests use synthetic images and simulated delivery, while live vision tests use invented labelled documents.
+
+**M6.5 local verification:** Migration 0010 applied; checksum and local readiness checks pass. 44 unit checks, 58 isolated PostgreSQL checks and 18 browser journeys pass. The polished Documents desktop/mobile flow was rerun and screenshots inspected. Typecheck, lint and local production build pass. Nine live OpenAI cases passed using labelled synthetic documents, including metadata extraction, fresh-conversation recall, byte-exact originals, native vision fallback, natural deletion, ambiguous duplicates and quoted intent refusal. Mandatory foreign-owner denial covers service and authenticated Web routes. Real Telegram recipient delivery remains a dogfooding check; tests simulate its multipart transport and verify byte equality without sending sensitive real files. Before deployment, provision and independently back up the private encryption key alongside existing database/ledger/backup operational gates. Images sent before this migration require re-upload to preserve their original.

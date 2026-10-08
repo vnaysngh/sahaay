@@ -25,6 +25,32 @@ export function getConfig() {
     )
   )
     throw new Error("Local preview must use a loopback origin");
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.SAHAAY_LOCAL_PREVIEW !== "1"
+  ) {
+    if (
+      ["SAHAAY_E2E", "SAHAAY_AUTH_EMAIL_CAPTURE"].some(
+        (key) => process.env[key] === "1",
+      )
+    )
+      throw new Error("Synthetic test bypasses cannot run in production");
+    if (
+      !process.env.SMTP_HOST ||
+      !process.env.SMTP_USER ||
+      !process.env.SMTP_PASSWORD ||
+      !process.env.SMTP_FROM ||
+      !["465", "587"].includes(process.env.SMTP_PORT ?? "")
+    )
+      throw new Error(
+        "Production requires transactional verification and recovery email",
+      );
+    if (
+      new URL(result.data.DATABASE_URL).searchParams.get("sslmode") !==
+      "verify-full"
+    )
+      throw new Error("Production requires verified database TLS");
+  }
   return result.data;
 }
 

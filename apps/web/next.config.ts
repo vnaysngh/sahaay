@@ -4,6 +4,10 @@ import type { NextConfig } from "next";
 config({ path: resolve(process.cwd(), "../../.env.local"), quiet: true });
 config({ path: resolve(process.cwd(), "../../.env"), quiet: true });
 process.env.SAHAAY_MEDIA_DIR ??= resolve(process.cwd(), "../../.local/media");
+process.env.SAHAAY_DELETION_LEDGER_DIR ??= resolve(
+  process.cwd(),
+  "../../.local/deletions",
+);
 const configNext: NextConfig = {
   distDir: process.env.SAHAAY_E2E === "1" ? ".next-test" : ".next",
   poweredByHeader: false,

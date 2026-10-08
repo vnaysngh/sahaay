@@ -1,3 +1,5 @@
+import { recordBehavior } from "./events";
+import { DeletionJournal } from "../privacy/journal";
 import type { UnifiedRequest } from "../core/contracts";
 import { recordContext, replaceContextSources } from "./record-context";
 import type { Pool, PoolClient } from "pg";
@@ -9,7 +11,11 @@ import type {
   MutationResult,
   RecordQuery,
 } from "../core/memory";
-import { memoryInput, searchTerms } from "../core/memory";
+import {
+  memoryInput,
+  searchTerms,
+  requireSafePersistence,
+} from "../core/memory";
 import { RequestError } from "../core/validation";
 import { mutate, missing, stale } from "./record-mutations";
 const projection = `m.id,m.memory_key AS "memoryKey",m.type,m.category,m.content,m.structured_value AS "structuredValue",m.scope,m.version,m.source_type AS "sourceType",m.source_id AS "sourceId",m.conversation_id AS "conversationId",m.confidence,m.valid_from AS "validFrom",m.valid_until AS "validUntil",m.supersedes_id AS "supersedesId",m.created_at AS "createdAt",m.updated_at AS "updatedAt",EXISTS(SELECT 1 FROM messages s WHERE s.id=m.source_id AND s.user_id=m.user_id AND s.created_at>now()-interval '7 days') AS "sourceAvailable"`;
@@ -46,6 +52,13 @@ export class PostgresMemory implements MemoryService {
       userId,
       records.map((r) => r.sourceId),
     );
+    if (records.length && this.request?.userId === userId)
+      await recordBehavior(
+        this.pool,
+        userId,
+        this.request.requestId,
+        "memory_recalled",
+      );
     return records;
   }
   private async get(
@@ -101,6 +114,7 @@ export class PostgresMemory implements MemoryService {
     return (await this.get(c, r.userId, id))!;
   }
   async remember(ctx: MutationContext, input: MemoryInput) {
+    requireSafePersistence(input);
     const v = memoryInput.parse(input),
       owner = ctx.request.userId;
     return mutate(
@@ -152,6 +166,7 @@ export class PostgresMemory implements MemoryService {
     expectedVersion: number,
     input: MemoryInput,
   ) {
+    requireSafePersistence(input);
     const v = memoryInput.parse(input),
       owner = ctx.request.userId;
     return mutate(
@@ -186,6 +201,12 @@ export class PostgresMemory implements MemoryService {
             [owner, old.scope, old.memoryKey],
           )
         ).rows.map((x) => x.source_id);
+        await new DeletionJournal().append({
+          kind: "memory",
+          userId: owner,
+          ids: [id],
+          sourceIds: [old.sourceId],
+        });
         await c.query(
           "UPDATE memories SET valid_until=now(),updated_at=now() WHERE id=$1 AND user_id=$2",
           [id, owner],
@@ -227,6 +248,21 @@ export class PostgresMemory implements MemoryService {
           missing();
         }
         if (old.version !== expectedVersion) stale();
+        const chain = (
+          await c.query(
+            "SELECT id,source_id FROM memories WHERE user_id=$1 AND scope=$2 AND memory_key=$3",
+            [owner, old.scope, old.memoryKey],
+          )
+        ).rows;
+        for (let offset = 0; offset < chain.length; offset += 500) {
+          const chunk = chain.slice(offset, offset + 500);
+          await new DeletionJournal().append({
+            kind: "memory",
+            userId: owner,
+            ids: chunk.map((r) => r.id),
+            sourceIds: chunk.map((r) => r.source_id),
+          });
+        }
         const removed = await c.query(
           "DELETE FROM memories WHERE user_id=$1 AND scope=$2 AND memory_key=$3 RETURNING source_id",
           [owner, old.scope, old.memoryKey],

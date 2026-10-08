@@ -24,11 +24,22 @@
     "test:live-web": "tsx scripts/web-smoke.ts",
     "test:live-multimodal": "tsx scripts/multimodal-smoke.ts",
     "test:live-research": "tsx scripts/research-smoke.ts",
-    "test:live-memory": "tsx scripts/memory-smoke.ts"
+    "test:live-memory": "tsx scripts/memory-smoke.ts",
+    "backup:create": "tsx scripts/backup.ts",
+    "backup:restore": "tsx scripts/backup.ts --restore",
+    "release:check": "tsx scripts/release-check.ts",
+    "eval:mvp": "vitest run && vitest run --config vitest.integration.config.ts && playwright test",
+    "test:restore": "vitest run --config vitest.integration.config.ts tests/integration/privacy.test.ts tests/integration/backup.test.ts",
+    "telegram:dev": "tsx scripts/telegram.ts",
+    "test:live-context": "tsx scripts/context-eval.ts",
+    "test:live-state": "tsx scripts/life-state-eval.ts",
+    "test:live-followups": "tsx scripts/followup-eval.ts",
+    "test:live-artifacts": "tsx scripts/artifact-eval.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/node": "26.6.4",
+    "@types/nodemailer": "8.0.2",
     "@types/pg": "8.23.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

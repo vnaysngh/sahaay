@@ -40,6 +40,7 @@ export function mediaNormalizer(
             id: source.id,
             dataUrl: `data:${source.mime};base64,${data.toString("base64")}`,
           });
+          current.content += `\n[Image attachment id: ${source.id}]`;
           imageCount++;
         } else {
           current.content +=

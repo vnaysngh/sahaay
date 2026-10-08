@@ -1,13 +1,19 @@
 import { getPool } from "@/db";
 import { Attachments } from "@/media/attachments";
 import { MAX_UPLOAD_BYTES } from "@/media/validate";
-import { requireOrigin, requireUser, errorResponse } from "@/channels/web/http";
+import {
+  requireOrigin,
+  requireUser,
+  requireProcessing,
+  errorResponse,
+} from "@/channels/web/http";
 import { RequestError } from "@/core/validation";
 export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     requireOrigin(request);
     const user = await requireUser(request);
+    await requireProcessing(user.id);
     const length = Number(request.headers.get("content-length"));
     if (length > MAX_UPLOAD_BYTES)
       throw new RequestError(413, "size", "Files must be smaller than 8 MB.");

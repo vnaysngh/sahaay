@@ -9,6 +9,9 @@ export const itemInput = z
     structuredValue: structuredValue.nullable(),
     listLabel: z.string().trim().max(60).nullable(),
     status: z.enum(["saved", "done", "archived"]),
+    recordRole: z.enum(["item", "object"]).optional(),
+    parentId: z.string().uuid().nullable().optional(),
+    stateLabel: z.string().trim().min(1).max(60).nullable().optional(),
   })
   .strict()
   .refine(
@@ -27,6 +30,14 @@ export type SavedItem = ItemInput & {
   sourceAvailable: boolean;
 };
 export interface SavedItemService {
+  inspect(
+    userId: string,
+    id: string,
+  ): Promise<{
+    object: SavedItem;
+    items: SavedItem[];
+    totalItems: number;
+  } | null>;
   find(userId: string, query: RecordQuery): Promise<SavedItem[]>;
   save(
     context: MutationContext,

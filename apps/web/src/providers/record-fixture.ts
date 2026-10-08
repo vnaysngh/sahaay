@@ -1,3 +1,4 @@
+import { resolveLocalTime, localDate } from "../core/followups";
 import type { UnifiedRequest } from "../core/contracts";
 import type { RecordServices } from "./record-tools";
 // Deterministic browser fixtures still exercise the real owned SQL services.
@@ -5,8 +6,297 @@ export async function recordFixture(
   services: RecordServices,
   request: UnifiedRequest,
   text: string,
-): Promise<{ text: string; operations: string[]; fail?: boolean } | null> {
+): Promise<{
+  text: string;
+  operations: string[];
+  fail?: boolean;
+  artifacts?: Array<{ id: string; title: string }>;
+} | null> {
   const ctx = { request, actionId: "record-fixture" };
+  if (services.artifacts) {
+    const service = services.artifacts,
+      base = text.split("\n[Image attachment")[0].trim(),
+      approved = { ...ctx, reviewItemIntent: async () => true };
+    if (base === "Keep my Aadhaar." || base === "Keep this invoice.") {
+      const image = request.inputs.find((i) => i.type === "image");
+      if (!image || image.type === "text")
+        throw Error("fixture image required");
+      const identity = base === "Keep my Aadhaar.";
+      await service.create(approved, {
+        attachmentId: image.attachmentId,
+        title: identity ? "Aadhaar Card" : "Laptop Invoice",
+        category: identity ? "identity_document" : "invoice",
+        description: identity
+          ? "Synthetic identity card"
+          : "Synthetic laptop invoice",
+        extractedText: identity
+          ? "Address: 42 Synthetic Road, Pune. Aadhaar 0000 1111 2222."
+          : "Laptop invoice amount 10000 INR",
+        metadata: identity
+          ? [
+              { key: "document_type", value: "aadhaar" },
+              { key: "address", value: "42 Synthetic Road, Pune" },
+              { key: "last_four", value: "2222" },
+            ]
+          : [{ key: "amount", value: "10000 INR" }],
+        relatedItemId: null,
+      });
+      return {
+        text: identity
+          ? "Kept your Aadhaar image in Documents."
+          : "Kept your laptop invoice in Documents.",
+        operations: ["artifact_create"],
+      };
+    }
+    if (
+      [
+        "Send me my Aadhaar.",
+        "What's the address on my Aadhaar?",
+        "Delete my Aadhaar.",
+        "What documents do you have for me?",
+        "Send my invoice.",
+      ].includes(base)
+    ) {
+      const rows = await service.search(
+        request.userId,
+        base.includes("invoice")
+          ? "invoice"
+          : base.startsWith("What documents")
+            ? null
+            : "aadhaar",
+      );
+      if (base.startsWith("What documents"))
+        return {
+          text: rows.map((r) => r.title).join(", ") || "No documents stored.",
+          operations: [],
+        };
+      if (!rows.length)
+        return { text: "I do not have that document stored.", operations: [] };
+      if (rows.length > 1)
+        return {
+          text: "I found multiple matching documents. Which one do you mean?",
+          operations: [],
+        };
+      const r = rows[0];
+      if (base.startsWith("Delete")) {
+        await service.delete(approved, r.id, r.version);
+        return {
+          text: "Deleted your Aadhaar original and extracted information.",
+          operations: ["artifact_delete"],
+        };
+      }
+      if (base.startsWith("Send")) {
+        await service.requestOriginal(approved, r.id);
+        return {
+          text: "Here is your stored original image.",
+          operations: [],
+          artifacts: [{ id: r.id, title: r.title }],
+        };
+      }
+      const record = await service.get(request.userId, r.id);
+      return {
+        text:
+          record.metadata.find((m) => m.key === "address")?.value ??
+          "Address unreadable.",
+        operations: [],
+      };
+    }
+  }
+
+  if (services.followups) {
+    const followups = services.followups;
+    const approved = { ...ctx, reviewItemIntent: async () => true };
+    if (text === "Remind me tomorrow at 10 AM to research flights for Japan.") {
+      const zone = (await followups.context(request.userId)).timezone;
+      if (!zone)
+        return {
+          text: "Please confirm your timezone in Inbox first.",
+          operations: [],
+        };
+      const tomorrow = new Date(Date.now() + 86400000),
+        localTime = localDate(tomorrow, zone).slice(0, 10) + "T10:00";
+      const plan = (
+        await services.items.find(request.userId, {
+          query: "Japan",
+          recordRole: "object",
+        })
+      )[0];
+      await followups.create(approved, {
+        reason: "Research flights for Japan",
+        relatedItemId: plan?.id ?? null,
+        localTime,
+        timezone: zone,
+        scheduledFor: resolveLocalTime(localTime, zone),
+      });
+      return {
+        text: "Scheduled your Japan flight-research reminder for tomorrow at 10 AM.",
+        operations: ["followup_create"],
+      };
+    }
+    if (
+      [
+        "Actually make that noon.",
+        "Cancel that reminder.",
+        "I already did that.",
+        "What follow-ups do I have?",
+      ].includes(text)
+    ) {
+      const records = (await followups.list(request.userId)).filter((r) =>
+        ["scheduled", "ready"].includes(r.status),
+      );
+      if (text === "What follow-ups do I have?")
+        return {
+          text:
+            records
+              .map((r) => r.reason + " · " + r.status + " · " + r.scheduledFor)
+              .join("\n") || "No active follow-ups.",
+          operations: [],
+        };
+      const record = records[0];
+      if (!record) return { text: "No active reminder found.", operations: [] };
+      const action =
+        text === "Actually make that noon."
+          ? "reschedule"
+          : text === "I already did that."
+            ? "done"
+            : "cancel";
+      const localTime =
+        localDate(new Date(record.scheduledFor), record.timezone).slice(0, 10) +
+        "T12:00";
+      await followups.change(
+        approved,
+        record.id,
+        record.version,
+        action,
+        action === "reschedule"
+          ? {
+              reason: record.reason,
+              relatedItemId: record.relatedItemId,
+              timezone: record.timezone,
+              localTime,
+              scheduledFor: resolveLocalTime(localTime, record.timezone),
+            }
+          : undefined,
+      );
+      return {
+        text:
+          action === "reschedule"
+            ? "Rescheduled that reminder for noon."
+            : action === "done"
+              ? "Marked that reminder done."
+              : "Cancelled that reminder.",
+        operations: ["followup_" + action],
+      };
+    }
+    if (text === "Can you monitor the price of this flight every day?") {
+      await services.unsupportedAction?.("travel", "flight_price_monitoring");
+      return {
+        text: "Flight price monitoring is not supported. No monitor was started.",
+        operations: [],
+      };
+    }
+  }
+
+  if (text === "Save these to my cart: Gym shoes, Swimming goggles, Dashcam.") {
+    for (const [i, content] of [
+      "Gym shoes",
+      "Swimming goggles",
+      "Dashcam",
+    ].entries())
+      await services.items.save(
+        {
+          ...ctx,
+          actionId: `cart-fixture-${i}`,
+          reviewItemIntent: async () => true,
+        },
+        {
+          kind: "cart item",
+          content,
+          recordRole: "item",
+          parentId: null,
+          stateLabel: "to buy",
+          url: null,
+          structuredValue: null,
+          listLabel: "cart",
+          status: "saved",
+        },
+      );
+    return { text: "Saved three items to your cart.", operations: ["save"] };
+  }
+  if (text === "I'm thinking about going to Japan in December.") {
+    const old = (
+      await services.items.find(request.userId, {
+        query: "Japan",
+        recordRole: "object",
+      })
+    )[0];
+    if (!old)
+      await services.items.save(
+        { ...ctx, reviewItemIntent: async () => true },
+        {
+          recordRole: "object",
+          parentId: null,
+          stateLabel: "planning",
+          kind: "trip",
+          content: "Japan trip",
+          url: null,
+          structuredValue: { details: "December" },
+          listLabel: null,
+          status: "saved",
+        },
+      );
+    return {
+      text: "Kept your Japan trip in planning for December.",
+      operations: old ? [] : ["save"],
+    };
+  }
+  if (text === "Save this hotel for Japan: https://example.com/kyoto-hotel") {
+    const parent = (
+      await services.items.find(request.userId, {
+        query: "Japan",
+        recordRole: "object",
+      })
+    )[0];
+    if (!parent) throw Error("missing fixture object");
+    await services.items.save(
+      { ...ctx, reviewItemIntent: async () => true },
+      {
+        recordRole: "item",
+        parentId: parent.id,
+        stateLabel: "considering",
+        kind: "hotel",
+        content: "Kyoto hotel",
+        url: "https://example.com/kyoto-hotel",
+        structuredValue: null,
+        listLabel: null,
+        status: "saved",
+      },
+    );
+    return {
+      text: "Saved Kyoto hotel for your Japan trip.",
+      operations: ["save"],
+    };
+  }
+  if (text === "What do I have planned for Japan?") {
+    const parent = (
+      await services.items.find(request.userId, {
+        query: "Japan",
+        recordRole: "object",
+      })
+    )[0];
+    const children = parent
+      ? await services.items.find(request.userId, {
+          query: null,
+          parentId: parent.id,
+        })
+      : [];
+    return {
+      text: parent
+        ? `Japan trip: planning for December. ${children.map((c) => c.content).join(", ")}`
+        : "No saved Japan trip.",
+      operations: [],
+    };
+  }
   if (text === "Remember I prefer aisle seats on flights.") {
     await services.memories.remember(ctx, {
       memoryKey: "flight_seat_preference",

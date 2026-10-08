@@ -1,3 +1,5 @@
+import { seal } from "./artifact-crypto";
+import { detectMedia } from "./validate";
 import type { Pool } from "pg";
 import { MediaFiles } from "./files";
 import { validateMedia } from "./validate";
@@ -42,9 +44,36 @@ export class Attachments {
           "quota",
           "You’ve reached the upload limit. Try again in an hour.",
         );
-      await this.files.put(id, result.data);
+      if (result.kind === "image") {
+        const used = (
+          await client.query(
+            "SELECT coalesce(sum(original_bytes),0)::bigint used FROM attachments WHERE user_id=$1 AND expires_at>now()",
+            [userId],
+          )
+        ).rows[0].used;
+        if (Number(used) + data.length > 64 * 1024 * 1024)
+          throw new RequestError(
+            429,
+            "media_budget",
+            "Temporary image storage is full. Remove unused uploads or try after older images expire.",
+          );
+      }
+      await this.files.put(
+        id,
+        result.data,
+        result.kind === "image" ? userId : undefined,
+      );
+      const original =
+        result.kind === "image"
+          ? await seal(data, userId, id, "temporary_image")
+          : null;
+      const detected = detectMedia(data);
+      const originalMime =
+        result.kind === "image"
+          ? `image/${detected?.format === "jpeg" ? "jpeg" : detected?.format}`
+          : null;
       await client.query(
-        "INSERT INTO attachments(id,user_id,kind,filename,mime,bytes,width,height,duration) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        "INSERT INTO attachments(id,user_id,kind,filename,mime,bytes,width,height,duration,original_image,original_mime,original_bytes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
         [
           id,
           userId,
@@ -55,6 +84,9 @@ export class Attachments {
           result.width ?? null,
           result.height ?? null,
           result.duration ?? null,
+          original,
+          originalMime,
+          original ? data.length : null,
         ],
       );
       await client.query("COMMIT");
@@ -99,7 +131,7 @@ export class Attachments {
         "This attachment has expired. Please upload it again.",
       );
     try {
-      return { attachment, data: await this.files.read(id) };
+      return { attachment, data: await this.files.read(id, userId) };
     } catch {
       throw new RequestError(
         410,
@@ -124,6 +156,9 @@ export class Attachments {
     await this.files.remove(id);
   }
   async cleanup() {
+    await this.pool.query(
+      "UPDATE attachments SET original_image=NULL,original_mime=NULL,original_bytes=NULL WHERE expires_at<=now() AND original_image IS NOT NULL",
+    );
     const expired = await this.pool.query(
       "SELECT id FROM attachments WHERE expires_at<=now()",
     );

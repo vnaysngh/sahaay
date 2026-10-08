@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { UnifiedRequest } from "./contracts";
+import { RequestError } from "./validation";
 export const structuredValue = z
   .record(
     z.string().max(50),
@@ -31,7 +32,16 @@ export type Memory = MemoryInput & {
   updatedAt: string;
   sourceAvailable: boolean;
 };
-export type MutationContext = { request: UnifiedRequest; actionId: string };
+export type ItemIntentReview = (
+  proposal: unknown,
+  directText: string,
+) => Promise<boolean>;
+export type MutationContext = {
+  request: UnifiedRequest;
+  actionId: string;
+  // Server callback; never part of the model's tool arguments.
+  reviewItemIntent?: ItemIntentReview;
+};
 export type MutationResult<T> = {
   outcome: "committed" | "replayed" | "deleted";
   record: T | null;
@@ -43,6 +53,9 @@ export type RecordQuery = {
   category?: string;
   type?: "semantic" | "episodic";
   listLabel?: string;
+  recordRole?: "item" | "object";
+  parentId?: string;
+  stateLabel?: string;
   status?: "saved" | "done" | "archived";
 };
 export interface MemoryService {
@@ -117,4 +130,21 @@ export function isMemoryCorrection(text: string) {
   return /\b(actually|instead|update (?:my |the )?memory|correct (?:my |the )?memory)\b|असल में|दरअसल/i.test(
     text,
   );
+}
+
+// No credential vault or sensitive-identifier persistence policy exists in the MVP.
+// A conservative deny rule is intentional; it is not automatic PII classification.
+export function requireSafePersistence(value: unknown) {
+  const text = JSON.stringify(value);
+  if (
+    /password|passphrase|\botp\b|one[ -]time (?:password|code)|api[ _-]?key|access[ _-]?token|secret[ _-]?key|aadha?ar|passport[ _-]?(?:number|no)|\bpan[ _-]?(?:number|card)\b|पासवर्ड|ओटीपी|आधार/iu.test(
+      text,
+    ) ||
+    /sk-(?:proj-)?[a-zA-Z0-9_-]{20,}/.test(text)
+  )
+    throw new RequestError(
+      400,
+      "sensitive_record",
+      "Sahaay cannot save passwords, access tokens, OTPs or sensitive identity numbers. Remove those details before saving.",
+    );
 }

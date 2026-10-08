@@ -6,12 +6,14 @@ import type {
   UnifiedRequest,
   InputNormalizer,
   ResearchSource,
+  ArtifactReference,
 } from "./contracts";
 export async function* respond(
   request: UnifiedRequest,
   store: ConversationStore,
   provider: AgentProvider,
   normalize?: InputNormalizer,
+  runSignal?: AbortSignal,
 ): AsyncGenerator<ResponseEvent> {
   yield {
     type: "processing",
@@ -29,7 +31,7 @@ export async function* respond(
       request.conversationId,
       request.messageId,
     );
-    const signal = AbortSignal.timeout(180_000);
+    const signal = runSignal ?? AbortSignal.timeout(180_000);
     if (normalize) {
       context = await normalize(context, request.userId, signal);
       yield {
@@ -40,6 +42,7 @@ export async function* respond(
     }
     let text = "";
     let sources: ResearchSource[] = [];
+    let artifacts: ArtifactReference[] = [];
     for await (const delta of provider.stream(context, {
       signal,
       request,
@@ -53,6 +56,7 @@ export async function* respond(
             stage: "researching",
           };
         else if (delta.type === "record_changes") operations = delta.operations;
+        else if (delta.type === "artifacts") artifacts = delta.artifacts;
         else sources = delta.sources;
         continue;
       }
@@ -66,15 +70,24 @@ export async function* respond(
       text = formatted.text;
       sources = formatted.sources;
     }
-    const id = sources.length
-      ? await store.complete(request, text, sources)
-      : await store.complete(request, text);
+    const id = artifacts.length
+      ? await store.complete(request, text, sources, artifacts)
+      : sources.length
+        ? await store.complete(request, text, sources)
+        : await store.complete(request, text);
     if (!id) throw new Error("interrupted");
+    if (artifacts.length) yield { type: "artifacts", artifacts };
     if (sources.length) yield { type: "sources", sources };
     yield { type: "complete", messageId: id, text };
   } catch (error) {
     if (operations.length) {
       const labels: Record<string, string> = {
+        followup_create: "Follow-up scheduled",
+        followup_reschedule: "Follow-up rescheduled",
+        followup_done: "Follow-up completed",
+        followup_cancel: "Follow-up cancelled",
+        artifact_create: "Document kept",
+        artifact_delete: "Document deleted",
         remember: "Memory saved",
         update_memory: "Memory corrected",
         forget: "Memory forgotten",
