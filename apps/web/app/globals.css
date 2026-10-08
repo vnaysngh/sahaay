@@ -1443,7 +1443,7 @@ textarea:focus {
 .inbox-reschedule {
   flex-basis: 100%;
 }
-.inbox details {
+.inbox details:not(.inbox-more) {
   margin-top: 28px;
 }
 @media (max-width: 600px) {
@@ -1820,14 +1820,39 @@ select {
 .inbox-more {
   position: relative;
 }
+.telegram-connection-status {
+  padding: 14px 16px;
+  margin: 20px 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.telegram-connection-status p {
+  margin: 0 0 12px;
+}
+.telegram-connection-status button {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--paper);
+}
 .inbox-more summary {
   list-style: none;
   cursor: pointer;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 9px 12px;
+  padding: 8px 12px;
+  background: var(--surface);
   color: var(--muted);
-  font-size: 13px;
+  font: inherit;
+}
+.inbox-more summary:hover {
+  background: var(--soft-green);
+}
+.inbox-more summary:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 4px;
 }
 .inbox-more summary::-webkit-details-marker {
   display: none;

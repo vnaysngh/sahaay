@@ -606,7 +606,10 @@ test("Telegram account link UI requires sign-in/origin and does not expose the b
   );
   await expect(
     page.getByRole("link", { name: "Open Telegram Web" }),
-  ).toHaveAttribute("href", "https://web.telegram.org/k/#@sahaay_test_bot");
+  ).toHaveAttribute(
+    "href",
+    /^https:\/\/web\.telegram\.org\/k\/#\?tgaddr=tg%3A%2F%2Fresolve%3Fdomain%3Dsahaay_test_bot%26start%3D[a-zA-Z0-9_-]{43}$/,
+  );
   await expect(page.locator("code")).toHaveText(/^\/start [a-zA-Z0-9_-]{43}$/);
   await page.route("**/api/telegram/link", async (route) => {
     if (route.request().method() === "GET")
@@ -614,7 +617,7 @@ test("Telegram account link UI requires sign-in/origin and does not expose the b
     else await route.continue();
   });
   await expect(page.getByRole("status")).toContainText(
-    "Your Telegram account is connected",
+    "Connected — your Telegram account is linked",
     { timeout: 10000 },
   );
   await expect(page.locator("code")).toHaveCount(0);

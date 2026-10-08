@@ -11,31 +11,56 @@ export function ConnectTelegram({
   const [url, setUrl] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
+    [statusError, setStatusError] = useState(""),
+    [checking, setChecking] = useState(false),
+    [refreshVersion, setRefreshVersion] = useState(0),
     [copied, setCopied] = useState(false),
     [connected, setConnected] = useState(linked);
   const token = url ? new URL(url).searchParams.get("start") : null;
   const appUrl = `tg://resolve?domain=${encodeURIComponent(username)}${token ? `&start=${encodeURIComponent(token)}` : ""}`;
-  const webUrl = `https://web.telegram.org/k/#@${encodeURIComponent(username)}`;
+  // Web K accepts a tg:// deep link via tgaddr; preserve the one-time start token.
+  const webUrl = `https://web.telegram.org/k/#?tgaddr=${encodeURIComponent(appUrl)}`;
   useEffect(() => {
-    if (!url || connected) return;
     let active = true;
+    let inFlight = false;
     const check = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      setChecking(true);
       try {
         const response = await fetch("/api/telegram/link", {
           cache: "no-store",
         });
-        if (!response.ok) return;
+        if (!response.ok) throw Error("Unable to check connection");
         const result = await response.json();
-        if (active && result.linked) {
-          setConnected(true);
-          setUrl("");
-          setCopied(false);
+        if (active) {
+          setConnected(Boolean(result.linked));
+          setStatusError("");
+          if (result.linked) {
+            setUrl("");
+            setCopied(false);
+          }
         }
       } catch {
-        /* A temporary connection failure does not invalidate the link. */
+        if (active)
+          setStatusError("Couldn’t refresh connection status. Try again.");
+      } finally {
+        inFlight = false;
+        if (active) setChecking(false);
       }
     };
-    const interval = setInterval(() => void check(), 3000);
+    void check();
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    const interval = url ? setInterval(() => void check(), 3000) : undefined;
+    return () => {
+      active = false;
+      window.removeEventListener("focus", onFocus);
+      clearInterval(interval);
+    };
+  }, [url, refreshVersion]);
+  useEffect(() => {
+    if (!url) return;
     const expiry = setTimeout(() => {
       setUrl("");
       setCopied(false);
@@ -44,11 +69,9 @@ export function ConnectTelegram({
       );
     }, 600000);
     return () => {
-      active = false;
-      clearInterval(interval);
       clearTimeout(expiry);
     };
-  }, [url, connected]);
+  }, [url]);
   async function act(disconnect = false) {
     setBusy(true);
     setError("");
@@ -74,6 +97,28 @@ export function ConnectTelegram({
     <main className="auth-screen">
       <section className="auth-card">
         <h1>Sahaay on Telegram.</h1>
+        <div className="telegram-connection-status">
+          <p role="status">
+            <strong>{connected ? "Connected" : "Not connected"}</strong>
+            {connected
+              ? " — your Telegram account is linked to this Sahaay account."
+              : url
+                ? " — waiting for you to press Start in Telegram."
+                : " — connect your Telegram account below."}
+          </p>
+          <button
+            type="button"
+            disabled={checking || busy}
+            onClick={() => setRefreshVersion((v) => v + 1)}
+          >
+            {checking ? "Checking…" : "Refresh status"}
+          </button>
+          {statusError && (
+            <p role="alert" className="error">
+              {statusError}
+            </p>
+          )}
+        </div>
         <p>
           Link Telegram to this account once. Your memories and saved items are
           shared; Telegram conversations also appear in Web Chat.
@@ -84,7 +129,7 @@ export function ConnectTelegram({
         </p>
         {connected ? (
           <>
-            <p role="status">
+            <p>
               Your Telegram account is connected. Send a message to @{username}.
             </p>
             <p>
@@ -121,7 +166,8 @@ export function ConnectTelegram({
             <p>
               The app button requires Telegram to be installed. If your browser
               blocks opening it, use Telegram Web or Telegram on your phone.
-              This page will confirm when linking succeeds.
+              Press Start in Telegram, then return here. This page will confirm
+              when linking succeeds.
             </p>
             <p>
               In Telegram Web or on your phone, search for @{username}, open the
@@ -148,6 +194,10 @@ export function ConnectTelegram({
             >
               {copied ? "Command copied" : "Copy connection command"}
             </button>
+            <p>
+              No response from the bot? Its message receiver may be offline.
+              Linking only completes after Sahaay replies with a confirmation.
+            </p>
           </div>
         )}
         {error && (

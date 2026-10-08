@@ -1,11 +1,25 @@
 import "./env";
 import { readFile, readdir } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { Pool } from "pg";
 import { migrationFailure } from "./migration-errors";
 let stage = "configuration";
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
+  const caFile = new URL(process.env.DATABASE_URL).searchParams.get(
+    "sslrootcert",
+  );
+  if (caFile) {
+    stage = "database TLS certificate file";
+    const ca = await readFile(caFile);
+    try {
+      new X509Certificate(ca);
+    } catch {
+      throw new Error(
+        "Database CA certificate is not valid PEM. Paste the complete certificate with real newlines into the Render secret file.",
+      );
+    }
+  }
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     connectionTimeoutMillis: 15000,
