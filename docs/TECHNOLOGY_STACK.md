@@ -563,3 +563,13 @@ Finalize only build prerequisites: unified schema/interfaces, existing OpenAI mo
 PostgreSQL is the only datastore. Docker is optional; choose an available local installation or development managed connection. Hosted production vendor/region/backups and tester auth/recovery/privacy disclosure are resolved before controlled launch, not additional infrastructure projects.
 
 Sequence: M0 decisions → M1 Core Web Chat → M2 Understand → M3 Research → M4 Remember + Organize → M5 Product validation. See IMPLEMENTATION_PLAN.md for testable slices. Show the revised plan before beginning M1; M1 has not started.
+
+## M8 current stack amendment — 2026-10-09
+
+Earlier status/deferred-channel sections are historical. Web/Telegram and M0–M7/M6.5 services exist. Mobile uses Expo SDK 57 (official template compatibility: React 19.2.3, React Native 0.86.3), Expo Router, TanStack Query, Better Auth 1.7.7 with its maintained Expo integration and SecureStore. Existing npm lockfile/workspaces remain authoritative. Web keeps its existing versions.
+
+Native capture uses Swift/Kotlin through a small local Expo module; @bacons/apple-targets generates the actual iOS extension target during prebuild. Development builds are required, not Expo Go. Platform media/notification libraries must be installed through Expo's compatible-version resolver and then pinned. Expo push is notification transport only; PostgreSQL and the existing M7 worker remain authoritative. No Clerk, local artifact vault, Zustand without need, second backend or new datastore.
+
+Native messages use mdast/CommonMark/GFM parsing already present in the Web ecosystem, with a React Native renderer (no HTML/WebView). Links only open HTTP(S); comparisons render as labelled vertical rows on phones. Expo system UI/network modules support appearance and offline notices. Dependencies are pinned; native build/audit limitations are tracked in the implementation plan.
+
+Mobile navigation uses `lucide-react-native` 1.54.0 and Expo-compatible `react-native-svg`, with a consistent 24px outline size/stroke. This matches the Web icon family and replaces platform-dependent text glyphs. Native SVG requires a rebuilt development client.

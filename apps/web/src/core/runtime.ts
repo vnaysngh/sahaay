@@ -1,3 +1,4 @@
+import { accountProfile } from "../db/profile";
 import { getPool } from "../db";
 import { PostgresConversations } from "../db/conversations";
 import { PostgresArtifacts } from "../db/artifacts";
@@ -19,7 +20,7 @@ export async function startSahaay(
     requestId: string;
     text: string;
     attachmentIds?: string[];
-    channel?: "web" | "telegram";
+    channel?: "web" | "telegram" | "mobile";
   },
 ) {
   const result = await new PostgresConversations(getPool()).begin(
@@ -35,6 +36,7 @@ export async function* sahaayEvents(request: UnifiedRequest) {
   const pool = getPool(),
     store = new PostgresConversations(pool);
   const provider = createAgentProvider({
+    accountProfile: await accountProfile(pool, request.userId),
     artifacts: new PostgresArtifacts(pool, request),
     followups: new PostgresFollowups(pool),
     memories: new PostgresMemory(pool, request),

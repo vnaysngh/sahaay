@@ -15,3 +15,8 @@ test-results/
 coverage/
 
 .next-test/
+
+apps/mobile/.expo/
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/expo-env.d.ts

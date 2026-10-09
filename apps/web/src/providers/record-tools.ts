@@ -17,9 +17,10 @@ import { itemInput } from "../core/items";
 import type { FollowupService } from "../core/followups";
 import { followupInput, resolveLocalTime } from "../core/followups";
 import { RequestError } from "../core/validation";
-import type {ArtifactService} from "../core/artifacts";
+import type { ArtifactService } from "../core/artifacts";
 export type RecordServices = {
-  artifacts?:ArtifactService;
+  accountProfile?: { displayName: string | null };
+  artifacts?: ArtifactService;
   followups?: FollowupService;
   memories: MemoryService;
   items: SavedItemService;

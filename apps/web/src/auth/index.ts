@@ -1,5 +1,6 @@
 import { sendAuthEmail, verificationRequired, emailConfigured } from "./email";
 import { after } from "next/server";
+import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { getDb } from "../db";
@@ -11,6 +12,7 @@ export function createAuth() {
     secret: config.BETTER_AUTH_SECRET,
     baseURL: config.BETTER_AUTH_URL,
     trustedOrigins: trustedOrigins(),
+    plugins: [expo()],
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
     emailAndPassword: {
       enabled: true,

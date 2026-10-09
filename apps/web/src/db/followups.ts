@@ -147,7 +147,11 @@ export class PostgresFollowups {
               v.timezone,
               ctx.request.messageId,
               ctx.request.conversationId,
-              ctx.request.channel === "telegram" ? "chat_telegram" : "chat_web",
+              ctx.request.channel === "telegram"
+                ? "chat_telegram"
+                : ctx.request.channel === "mobile"
+                  ? "chat_mobile"
+                  : "chat_web",
             ],
           )
         ).rows[0].id;
@@ -210,7 +214,11 @@ export class PostgresFollowups {
           version,
           action,
           input,
-          ctx.request.channel === "telegram" ? "chat_telegram" : "chat_web",
+          ctx.request.channel === "telegram"
+            ? "chat_telegram"
+            : ctx.request.channel === "mobile"
+              ? "chat_mobile"
+              : "chat_web",
         );
         await recordBehavior(
           c,
@@ -248,7 +256,12 @@ export class PostgresFollowups {
     version: number,
     action: FollowupAction,
     input: FollowupInput | undefined,
-    source: "chat_web" | "chat_telegram" | "web_inbox",
+    source:
+      | "chat_web"
+      | "chat_telegram"
+      | "chat_mobile"
+      | "web_inbox"
+      | "mobile_inbox",
   ) {
     const old = await this.get(c, owner, id);
     if (!old) missing();
@@ -321,6 +334,7 @@ export class PostgresFollowups {
     action: FollowupAction,
     input?: FollowupInput,
     confirmed = false,
+    channel: "web" | "mobile" = "web",
   ) {
     if ((action === "cancel" || action === "dismiss") && !confirmed)
       throw new RequestError(
@@ -355,7 +369,7 @@ export class PostgresFollowups {
         version,
         action,
         input,
-        "web_inbox",
+        channel === "mobile" ? "mobile_inbox" : "web_inbox",
       );
       const requestId = crypto.randomUUID();
       await recordBehavior(c, owner, requestId, this.event(action));

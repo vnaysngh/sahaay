@@ -87,6 +87,7 @@ export async function POST(request: Request) {
         a.action,
         schedule,
         a.confirmed === true,
+        request.headers.get("origin") === "sahaay://" ? "mobile" : "web",
       ),
       { headers: { "Cache-Control": "no-store" } },
     );

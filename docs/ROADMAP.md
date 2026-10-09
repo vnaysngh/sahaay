@@ -1,6 +1,6 @@
 # Sahaay MVP Roadmap
 
-**Updated:** 2026-10-06. M0–M6 complete; M7 Inbox + Controlled Follow-ups is the current build.
+**Updated:** 2026-10-09. M0–M7 and M6.5 have implemented services and verification recorded in IMPLEMENTATION_PLAN.md. M8 Mobile is the current build; native release gates remain pending.
 
 ## NEEDED FOR MVP
 
@@ -22,9 +22,9 @@ Choose later investments from repeated real usage and coarse unsupported-action 
 ## Post-MVP progression
 
 - **M6 — Personal Life State:** Completed; generic owned objects/items, distinct memories and shared Web/Telegram state.
-- **M7 — Inbox + Controlled Follow-ups:** Explicit one-off reminders, deterministic timing, small Web Inbox, Telegram notifications and normalized capability-gap events. No autonomous monitoring.
+- **M7 — Inbox + Controlled Follow-ups:** Implemented; explicit one-off reminders, deterministic timing, small Web Inbox, Telegram notifications and normalized capability-gap events. No autonomous monitoring.
 - **Dogfood:** Founder and small tester group; observe continuity, return usage and repeated unsupported actions.
-- **M8 — First Connected Capability:** Deferred; select from observed demand, not assumptions.
+- **M8 — Sahaay Mobile:** Native primary consumer app; reuse shared identity/core, cloud Documents, native sharing and existing follow-ups. First external capability selection remains deferred until product evidence.
 - **M9 — First Consequential Action:** Deferred; explicit policy/confirmation before execution.
 - **M10 — First Autopilot:** Deferred; only after repeated valuable workflows emerge.
 

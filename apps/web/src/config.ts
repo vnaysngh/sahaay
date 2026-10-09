@@ -56,7 +56,7 @@ export function getConfig() {
 
 export function trustedOrigins() {
   const uri = new URL(getConfig().BETTER_AUTH_URL);
-  const origins = [uri.origin];
+  const origins = [uri.origin, "sahaay://"];
   if (
     (process.env.NODE_ENV !== "production" ||
       process.env.SAHAAY_LOCAL_PREVIEW === "1") &&

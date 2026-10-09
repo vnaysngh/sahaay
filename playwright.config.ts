@@ -4,7 +4,10 @@ import { defineConfig } from "@playwright/test";
 const uri = new URL(
   process.env.DATABASE_URL ?? "postgresql://localhost/sahaay_test",
 );
-uri.pathname = "/sahaay_test";
+const testDatabase = process.env.SAHAAY_BROWSER_TEST_DB ?? "sahaay_test";
+if (!/^sahaay_test(?:_[a-z0-9_]+)?$/.test(testDatabase))
+  throw new Error("Browser tests require an isolated sahaay_test database.");
+uri.pathname = "/" + testDatabase;
 export default defineConfig({
   testDir: "tests/web",
   workers: 1,

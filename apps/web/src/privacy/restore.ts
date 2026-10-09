@@ -115,6 +115,15 @@ export async function suppressDeletedData(pool: Pool, entries: Evidence[]) {
       await client.query("DELETE FROM telegram_link_codes");
       await client.query("DELETE FROM telegram_updates");
     }
+    if (
+      (
+        await client.query(
+          "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='mobile_devices'",
+        )
+      ).rowCount
+    ) {
+      await client.query("DELETE FROM mobile_devices");
+    }
     await client.query("DELETE FROM session");
     await client.query("DELETE FROM verification");
     // Restoring an older snapshot must not revive an old/compromised password.

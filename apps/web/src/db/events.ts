@@ -59,6 +59,16 @@ export async function recordEvent(
 }
 
 export type Behavior =
+  | "mobile_app_opened"
+  | "mobile_login_completed"
+  | "mobile_chat_started"
+  | "mobile_message_sent"
+  | "mobile_share_received"
+  | "mobile_share_completed"
+  | "mobile_artifact_opened"
+  | "mobile_saved_item_opened"
+  | "mobile_followup_opened"
+  | "mobile_followup_completed"
   | "artifact_created"
   | "artifact_accessed"
   | "artifact_retrieved"

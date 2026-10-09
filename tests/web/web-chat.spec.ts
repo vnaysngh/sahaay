@@ -964,3 +964,50 @@ test("Open Sans and persistent light/dark appearance work across the assistant s
     ),
   ).toBe(true);
 });
+test("mobile origin uses the same authenticated account and rejects unowned state", async ({
+  page,
+}) => {
+  await signup(page);
+  const headers = { origin: "sahaay://" };
+  const native = await page.request.get("/api/state", { headers });
+  expect(native.status()).toBe(200);
+  expect(await native.json()).toMatchObject({ records: [], memories: [] });
+  const foreign = await page.request.get(
+    "/api/state?object=" + crypto.randomUUID(),
+    { headers },
+  );
+  expect(foreign.status()).toBe(404);
+  const eventId = crypto.randomUUID();
+  expect(
+    (
+      await page.request.post("/api/mobile/events", {
+        headers,
+        data: { eventId, event: "mobile_app_opened" },
+      })
+    ).status(),
+  ).toBe(204);
+  expect(
+    (
+      await page.request.post("/api/mobile/events", {
+        headers,
+        data: {
+          eventId,
+          event: "mobile_app_opened",
+          privateContent: "not permitted",
+        },
+      })
+    ).status(),
+  ).toBe(400);
+  expect(
+    (
+      await page.request.post("/api/mobile/events", {
+        headers: { origin: "https://untrusted.invalid" },
+        data: { eventId, event: "mobile_app_opened" },
+      })
+    ).status(),
+  ).toBe(403);
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  expect((await page.request.get("/api/state", { headers })).status()).toBe(
+    401,
+  );
+});

@@ -25,6 +25,7 @@
     "remark-parse": "11.0.0",
     "sharp": "0.35.5",
     "unified": "11.0.5",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "@better-auth/expo": "1.7.7"
   }
 }

@@ -95,3 +95,13 @@ ADR-021/022/023 are accepted. M0 provider defaults, pending practical tests, sta
 ## M1 authorization and local setup — 2026-10-04
 
 The user approved the revised plan and explicitly instructed “go ahead, start working”. This supersedes the earlier stop-before-M1 statements. M1 uses the selected stack and repo-local native PostgreSQL 17 development launcher, with no system service/cloud provisioning. Better Auth email/password enables local sign-in; verification and recovery are not yet enabled for testers. Server responses use the one selected OpenAI agent, no hosted sessions/tracing, and scoped PostgreSQL history. Media/research/permanent memory are not advertised as available in M1. Future milestone scope is unchanged.
+
+## ADR-029 — Shared native client (M8, 2026-10-09)
+
+Accepted user direction: React Native/Expo, Expo Router and TanStack Query; existing npm workspace, Next backend and canonical Better Auth account retained. Local component state suffices for UI state. Strict API-client contracts validate transport; agent/state/media logic stays on the server. The current official Expo SDK 57 template selects React 19.2.3/RN 0.86.3, isolated from Web React dependencies. No unused apps/api or domain-package extraction.
+
+iOS startup uses Expo's `ExpoAppSceneDelegate` and `ExpoReactNativeFactoryProvider` through a checked prebuild plugin. iOS 27 rejects the older app-delegate-only window lifecycle; the scene delegate supplied by Expo creates the window and forwards lifecycle/deep-link events. Keep this configuration in source so regenerated native projects retain it, rather than maintaining a parallel custom scene implementation. Multiple scenes are disabled for this single-workspace client.
+
+## ADR-030 — Native capture, cloud Documents and controlled push
+
+Accepted design: native iOS ShareViewController with protected drafts plus Android intents, rather than experimental forced-extension-to-app handoff. A small native module is limited to capture/security/lifecycle. Documents reuse existing cloud storage; explicit intent remains necessary. Expo notifications deliver existing M7 follow-ups with per-device durable attempts; no second scheduler. Real cold/warm/signed-out share and push tests remain release gates. Local builds use provisional com.sahaay.app until the owner configures signing/project credentials.

@@ -1,0 +1,1 @@
+module.exports={type:'share',name:'SahaayShareExtension',displayName:'Sahaay',bundleIdentifier:'.share',deploymentTarget:'16.4',frameworks:['UIKit','UniformTypeIdentifiers'],entitlements:{'com.apple.security.application-groups':['group.com.sahaay.app'],'com.apple.developer.default-data-protection':'NSFileProtectionComplete'}};

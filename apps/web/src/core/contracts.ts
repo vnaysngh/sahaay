@@ -28,7 +28,7 @@ export type UnifiedRequest = {
     | { type: "image" | "audio"; attachmentId: string }
   >;
   receivedAt: string;
-  channel?: "web" | "telegram";
+  channel?: "web" | "telegram" | "mobile";
   responseLanguage?: string;
 };
 export type ResponseEvent =

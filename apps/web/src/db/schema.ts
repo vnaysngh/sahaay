@@ -384,7 +384,7 @@ export const productEvents = pgTable(
     index("product_event_expiry").on(t.createdAt),
     check(
       "product_event_behaviors",
-      sql`${t.behaviors}<@ARRAY['state_created','state_revisited','state_updated','memory_created','memory_recalled','saved_item_created','unsupported_action','followup_created','followup_rescheduled','followup_triggered','followup_delivered','followup_opened','followup_completed','followup_dismissed','followup_cancelled','inbox_viewed','inbox_item_opened','artifact_created','artifact_accessed','artifact_retrieved','artifact_original_retrieved','artifact_searched','artifact_deleted','artifact_linked_to_state']::text[]`,
+      sql`${t.behaviors}<@ARRAY['state_created','state_revisited','state_updated','memory_created','memory_recalled','saved_item_created','unsupported_action','followup_created','followup_rescheduled','followup_triggered','followup_delivered','followup_opened','followup_completed','followup_dismissed','followup_cancelled','inbox_viewed','inbox_item_opened','artifact_created','artifact_accessed','artifact_retrieved','artifact_original_retrieved','artifact_searched','artifact_deleted','artifact_linked_to_state','mobile_app_opened','mobile_login_completed','mobile_chat_started','mobile_message_sent','mobile_share_received','mobile_share_completed','mobile_artifact_opened','mobile_saved_item_opened','mobile_followup_opened','mobile_followup_completed']::text[]`,
     ),
     check(
       "unsupported_capability",
@@ -496,6 +496,7 @@ export const followups = pgTable(
       columns: [t.relatedItemId, t.userId],
       foreignColumns: [savedItems.id, savedItems.userId],
     }), // Migration supplies column-specific SET NULL and deletion trigger.
+    unique("followup_owned_id").on(t.id, t.userId),
     index("followup_due")
       .on(t.scheduledFor)
       .where(sql`${t.status}='scheduled'`),
@@ -564,5 +565,71 @@ export const messageArtifacts = pgTable(
       columns: [t.artifactId, t.userId],
       foreignColumns: [artifacts.id, artifacts.userId],
     }).onDelete("cascade"),
+  ],
+);
+
+export const mobileDevices = pgTable(
+  "mobile_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    installationId: uuid("installation_id").notNull(),
+    revision: uuid("revision").notNull().defaultRandom(),
+    expoToken: text("expo_token").notNull().unique(),
+    projectId: uuid("project_id").notNull(),
+    platform: text("platform").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: time("created_at").notNull().defaultNow(),
+    updatedAt: time("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique().on(t.userId, t.installationId),
+    unique().on(t.id, t.userId),
+    index("mobile_device_owner").on(t.userId),
+    check("mobile_device_platform", sql`${t.platform} IN ('ios','android')`),
+    check("mobile_device_token_size", sql`length(${t.expoToken})<=256`),
+  ],
+);
+export const mobilePushDeliveries = pgTable(
+  "mobile_push_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    followupId: uuid("followup_id").notNull(),
+    followupVersion: integer("followup_version").notNull(),
+    deviceId: uuid("device_id").notNull(),
+    deviceRevision: uuid("device_revision").notNull(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    attemptId: uuid("attempt_id"),
+    ticketId: text("ticket_id"),
+    retryAt: time("retry_at"),
+    acceptedAt: time("accepted_at"),
+    receiptCheckedAt: time("receipt_checked_at"),
+    createdAt: time("created_at").notNull().defaultNow(),
+    updatedAt: time("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.deviceId, t.userId],
+      foreignColumns: [mobileDevices.id, mobileDevices.userId],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.followupId, t.userId],
+      foreignColumns: [followups.id, followups.userId],
+    }).onDelete("cascade"),
+    unique().on(t.followupId, t.followupVersion, t.deviceId),
+    check("mobile_push_version", sql`${t.followupVersion}>0`),
+    check(
+      "mobile_push_status",
+      sql`${t.status} IN ('pending','sending','accepted','delivered','unknown','failed','cancelled')`,
+    ),
+    index("mobile_push_pending")
+      .on(t.status, t.retryAt)
+      .where(sql`${t.status} IN ('pending','sending','accepted')`),
   ],
 );

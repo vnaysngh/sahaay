@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "apps/web"
+    "apps/web",
+    "apps/mobile",
+    "packages/api-client"
   ],
   "engines": {
     "node": ">=22.19.0 <23"
@@ -12,8 +14,8 @@
     "dev": "npm run dev -w apps/web",
     "build": "npm run build -w apps/web",
     "start": "npm run start -w apps/web",
-    "typecheck": "tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p tsconfig.tools.json",
-    "lint": "eslint apps/web scripts/*.ts tests --max-warnings=0",
+    "typecheck": "tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p tsconfig.tools.json && npm run typecheck -w apps/mobile",
+    "lint": "eslint apps/web apps/mobile/app apps/mobile/src packages/api-client/src scripts/*.ts tests --max-warnings=0",
     "db:local": "tsx scripts/local-postgres.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:check": "tsx scripts/migrate.ts --check",
@@ -34,7 +36,10 @@
     "test:live-context": "tsx scripts/context-eval.ts",
     "test:live-state": "tsx scripts/life-state-eval.ts",
     "test:live-followups": "tsx scripts/followup-eval.ts",
-    "test:live-artifacts": "tsx scripts/artifact-eval.ts"
+    "test:live-artifacts": "tsx scripts/artifact-eval.ts",
+    "mobile:dev": "npm run start -w apps/mobile",
+    "mobile:ios": "npm run ios -w apps/mobile",
+    "mobile:android": "npm run android -w apps/mobile"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

@@ -18,7 +18,10 @@ export async function POST(request: Request) {
         "input",
         "Send text (up to 4,000 characters), images or a voice clip to a valid conversation.",
       );
-    const result = await startSahaay(user.id, parsed.data);
+    const result = await startSahaay(user.id, {
+      ...parsed.data,
+      channel: request.headers.get("origin") === "sahaay://" ? "mobile" : "web",
+    });
     if (result.duplicate)
       return Response.json(
         { duplicate: true, messageId: result.messageId, status: result.status },
