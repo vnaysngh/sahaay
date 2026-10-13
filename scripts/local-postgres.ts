@@ -3,6 +3,7 @@ import { mkdir, access, appendFile, chmod } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import EmbeddedPostgres from "embedded-postgres";
+class LauncherConfigurationError extends Error {}
 async function main() {
   if (process.env.NODE_ENV === "production")
     throw new Error("This launcher is for local development only");
@@ -33,8 +34,8 @@ async function main() {
     uri.port !== "55432" ||
     uri.pathname !== "/sahaay"
   )
-    throw new Error(
-      "DATABASE_URL is already configured. Start that database instead of this local launcher.",
+    throw new LauncherConfigurationError(
+      "DATABASE_URL points to an external database or a different local setup. db:local only starts PostgreSQL on 127.0.0.1:55432/sahaay. For Supabase, skip db:local and run npm run dev; your configured database is used directly.",
     );
   const pg = new EmbeddedPostgres({
     databaseDir: resolve(".local/postgres"),
@@ -82,9 +83,11 @@ async function main() {
   process.on("SIGTERM", stop);
   await new Promise(() => {});
 }
-main().catch(() => {
+main().catch((error: unknown) => {
   console.error(
-    "Local database could not start. Check port 55432 and the development setup.",
+    error instanceof LauncherConfigurationError
+      ? error.message
+      : "Local database could not start. Check port 55432 and the development setup.",
   );
   process.exitCode = 1;
 });

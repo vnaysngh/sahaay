@@ -2,6 +2,7 @@ import type { ExpoConfig } from "expo/config";
 const config: ExpoConfig = {
   name: "Sahaay",
   slug: "sahaay",
+  owner: "vnaysngh94",
   icon: "./assets/icon.png",
   scheme: "sahaay",
   version: "0.1.0",
@@ -9,6 +10,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: "com.sahaay.app",
+    appleTeamId: process.env.APPLE_TEAM_ID,
     supportsTablet: true,
     entitlements: {
       "com.apple.security.application-groups": ["group.com.sahaay.app"],
@@ -37,6 +39,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     "./plugins/with-ios-scenes",
+    "./plugins/with-ios-build-scripts",
     "expo-router",
     "expo-font",
     "expo-web-browser",
@@ -56,6 +59,7 @@ const config: ExpoConfig = {
     "@bacons/apple-targets",
   ],
   experiments: { typedRoutes: true },
-  extra: { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } },
+  // Public project identity, shared by local and EAS builds.
+  extra: { eas: { projectId: "e2693b35-ca7b-4539-a57b-c23512fa2da3" } },
 };
 export default config;

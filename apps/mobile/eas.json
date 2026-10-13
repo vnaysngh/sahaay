@@ -1,13 +1,33 @@
 {
-  "cli": { "version": ">=16.0.0" },
+  "cli": {
+    "version": ">=16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
-    "development": { "developmentClient": true, "distribution": "internal" },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
     "simulator": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true }
+      "ios": {
+        "simulator": true
+      }
     },
-    "preview": { "distribution": "internal" },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://sahaay-bjza.onrender.com"
+      }
+    }
+  },
+  "submit": {
     "production": {}
   }
 }

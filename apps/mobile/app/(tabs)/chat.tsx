@@ -478,23 +478,62 @@ export default function Chat() {
         <View
           style={{ gap: 8, paddingTop: 8, paddingBottom: 12, flexShrink: 0 }}
         >
-          {media.map((m, i) => (
-            <View key={m.uri}>
-              {m.kind === "image" ? (
-                <Image
-                  source={{ uri: m.uri }}
-                  style={{ width: 64, height: 64, borderRadius: 8 }}
-                />
-              ) : (
-                <Label>Voice recording ready</Label>
-              )}
-              <Button
-                title="Remove attachment"
-                secondary
-                onPress={() => setMedia((ms) => ms.filter((_, j) => j !== i))}
-              />
-            </View>
-          ))}
+          {media.length ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flexGrow: 0 }}
+              contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+            >
+              {media.map((m, i) => (
+                <View
+                  key={m.uri}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 10,
+                    maxWidth: 300,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: colors.line,
+                    backgroundColor: colors.card,
+                  }}
+                >
+                  {m.kind === "image" ? (
+                    <Image
+                      source={{ uri: m.uri }}
+                      style={{ width: 56, height: 56, borderRadius: 8 }}
+                    />
+                  ) : (
+                    <Label>Voice recording</Label>
+                  )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      m.kind === "image"
+                        ? "Remove image attachment"
+                        : "Remove voice recording"
+                    }
+                    disabled={busy}
+                    accessibilityState={{ disabled: busy }}
+                    onPress={() =>
+                      setMedia((ms) => ms.filter((_, j) => j !== i))
+                    }
+                    style={{
+                      width: 44,
+                      height: 44,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: busy ? 0.5 : 1,
+                    }}
+                  >
+                    <X color={colors.muted} size={22} strokeWidth={1.8} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
           <Input
             accessibilityLabel="Message"
             placeholder="Tell Sahaay what’s on your mind…"
