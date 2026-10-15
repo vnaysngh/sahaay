@@ -20,6 +20,11 @@ import { authClient } from "../src/auth";
 import { event } from "../src/events";
 import { shares } from "../src/shares";
 import { clearPendingRun } from "../src/pending-run";
+import * as Linking from "expo-linking";
+import {
+  captureGoogleCompletion,
+  completeGoogleAuthorization,
+} from "../src/google-authorization";
 import { ThemeProvider, useTheme, Loading } from "../src/ui";
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +38,30 @@ function Layout() {
   const segments = useSegments();
   const owner = session.data?.user.id;
   const previous = useRef(owner);
+  useEffect(() => {
+    let active = true;
+    const complete = async (url?: string) => {
+      try {
+        if (url) await captureGoogleCompletion(url);
+        if (owner && active && (await completeGoogleAuthorization(owner)))
+          await queryClient.invalidateQueries({
+            queryKey: [owner, "google-connections"],
+          });
+      } catch {
+        /* Connected Accounts reads backend status and lets the user restart. */
+      }
+    };
+    void Linking.getInitialURL()
+      .then((url) => complete(url ?? undefined))
+      .catch(() => {});
+    const listener = Linking.addEventListener("url", ({ url }) => {
+      void complete(url);
+    });
+    return () => {
+      active = false;
+      listener.remove();
+    };
+  }, [owner]);
   const [foreground, setForeground] = useState(
     AppState.currentState === "active",
   );

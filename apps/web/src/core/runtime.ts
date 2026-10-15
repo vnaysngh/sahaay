@@ -1,4 +1,6 @@
 import { accountProfile } from "../db/profile";
+import { GoogleConnections } from "../google/connections";
+import { ActionApprovals } from "./approvals";
 import { getPool } from "../db";
 import { PostgresConversations } from "../db/conversations";
 import { PostgresArtifacts } from "../db/artifacts";
@@ -36,6 +38,8 @@ export async function* sahaayEvents(request: UnifiedRequest) {
   const pool = getPool(),
     store = new PostgresConversations(pool);
   const provider = createAgentProvider({
+    google: new GoogleConnections(pool),
+    approvals: new ActionApprovals(pool),
     accountProfile: await accountProfile(pool, request.userId),
     artifacts: new PostgresArtifacts(pool, request),
     followups: new PostgresFollowups(pool),

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { connectionsSchema, authorizeInput, approvalSchema } from "./google";
+export * from "./google";
 const id = z.string().uuid();
 export const sourceSchema = z.object({
   id: z.string(),
@@ -222,6 +224,49 @@ export class SahaayClient {
   }
   conversations() {
     return this.json("/api/conversations", z.array(conversationSchema));
+  }
+  googleConnections() {
+    return this.json("/api/connections/google", connectionsSchema);
+  }
+  authorizeGoogle(input: import("zod").infer<typeof authorizeInput>) {
+    return this.json(
+      "/api/connections/google/authorize",
+      z.object({
+        url: z.string().url(),
+        transactionId: z.string().regex(/^[a-f0-9]{64}$/),
+      }),
+      authorizeInput.parse(input),
+    );
+  }
+  disconnectGoogle(connectionId: string) {
+    return this.json(
+      "/api/connections/google",
+      z.object({ ok: z.literal(true), revocationConfirmed: z.boolean() }),
+      { connectionId: id.parse(connectionId) },
+      "DELETE",
+    );
+  }
+  completeGoogle(transactionId: string, reference: string) {
+    return this.json(
+      "/api/connections/google/complete",
+      z.object({ ok: z.literal(true) }),
+      { transactionId, reference },
+    );
+  }
+  approvals(conversationId?: string) {
+    return this.json(
+      "/api/actions" +
+        (conversationId
+          ? "?conversationId=" + encodeURIComponent(conversationId)
+          : ""),
+      z.array(approvalSchema),
+    );
+  }
+  approveAction(actionId: string, decision: "approve" | "cancel") {
+    return this.json("/api/actions", z.unknown(), {
+      id: id.parse(actionId),
+      decision,
+    });
   }
   createConversation() {
     return this.json("/api/conversations", conversationSchema, {});

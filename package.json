@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
+    "@types/mailparser": "3.9.0",
     "@types/node": "26.6.4",
     "@types/nodemailer": "8.0.2",
     "@types/pg": "8.23.1",

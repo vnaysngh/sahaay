@@ -1964,3 +1964,56 @@ select {
     font-size: 34px;
   }
 }
+ .connections-stack { display: grid; gap: 24px; }
+ .connection-card { border: 1px solid var(--line, #708070); border-radius: 16px; padding: 24px; min-width: 0; }
+ .connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+ .connections-stack button { min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+ .connections-stack button:hover { background: var(--soft-green); }
+ .connections-stack button:disabled { opacity: .5; cursor: default; }
+ .connections-stack button:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+ .connection-card { background: var(--surface); }
+ .connection-card dd { margin: 4px 0 16px; }
+ .connection-identity { display: flex; align-items: center; gap: 12px; }
+ .connection-services { display: grid; gap: 12px; margin: 20px 0; }
+ .connection-service { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+ .connection-service h3, .connection-service p { margin: 0; }
+ .connection-service p { margin-top: 6px; }
+ .connection-granted { color: var(--green); }
+ .connection-permissions { margin: 20px 0; }
+ .connection-permissions summary { cursor: pointer; }
+ .connection-access-list li { margin: 8px 0; }
+ .chat-action-approvals { display: grid; gap: 16px; margin: 16px 0; }
+ .chat-action-card { border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--surface); }
+ .chat-action-approvals dl { margin: 20px 0; display: grid; gap: 16px; }
+ .chat-action-approvals dt { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+ .chat-action-approvals dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+ .chat-action-receipt { padding: 12px 0; color: var(--muted); }
+ .chat-action-sent { margin-top: 12px; }
+ .chat-action-sent summary { cursor: pointer; font-size: 14px; }
+ .chat-action-detail-body { margin-top: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; }
+ .chat-action-approvals h3 { margin-top: 0; }
+ .chat-action-approvals small { display: block; margin-top: 16px; color: var(--muted); }
+ .chat-action-approvals button { border: 1px solid var(--line); border-radius: 10px; padding: 12px 18px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+ .chat-action-approvals .connection-actions button:first-child { background: var(--green); color: var(--on-accent); border-color: var(--green); }
+ .chat-action-approvals button:disabled { opacity: .55; cursor: default; }
+ .chat-action-history { padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); }
+ .chat-action-history summary { cursor: pointer; line-height: 1.5; }
+ .chat-action-history summary span + span { margin-left: 12px; font-size: 14px; }
+ .chat-action-history-content { margin-top: 20px; color: var(--ink); }
+ .connection-disconnect-dialog { width: min(520px, calc(100vw - 32px)); box-sizing: border-box; padding: 32px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 80px rgba(0, 0, 0, .24); max-height: calc(100dvh - 48px); overflow-y: auto; }
+ .connection-disconnect-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+ .disconnect-heading { display: flex; gap: 14px; align-items: center; margin-bottom: 24px; }
+ .disconnect-heading h2 { margin: 0; font-size: 22px; line-height: 1.35; }
+ .disconnect-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 12px; background: var(--soft-green); }
+ .disconnect-account { padding: 16px; border: 1px solid var(--line); background: var(--paper); border-radius: 12px; font-weight: 600; overflow-wrap: anywhere; }
+ .disconnect-consequence { color: var(--muted); font-size: 14px; line-height: 1.6; }
+ .disconnect-dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 28px; }
+ .connection-disconnect-dialog button { padding: 12px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+ .connection-disconnect-dialog .disconnect-confirm { background: #b42318; color: #fff; border-color: #b42318; }
+ .connection-disconnect-dialog button:disabled { opacity: .6; cursor: wait; }
+ .connection-notice { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft-green); }
+ @media (max-width: 480px) { .connection-disconnect-dialog { padding: 24px; } .disconnect-dialog-actions button { flex: 1; } }
+ .connection-last-used { font-size: 14px; color: var(--muted); }
+ @media (max-width: 600px) { .connection-service { align-items: flex-start; flex-direction: column; } }
+ .connection-avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--soft-green); font-size: 16px; }
+ .action-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 0.9rem; }

@@ -29,6 +29,20 @@ it("rejects malformed arguments and credential-bearing queries before the semant
   expect(review).not.toHaveBeenCalled();
   expect(execute).not.toHaveBeenCalled();
 });
+it("does not disclose a private Google completion reference to public research", () => {
+  expect(
+    publicQueryCheck("Read https://example.com/connect/google/complete")
+      .allowed,
+  ).toBe(true);
+  expect(
+    publicQueryCheck(
+      "Read https://example.com/connect/google/complete?reference=" +
+        "a".repeat(43) +
+        "&transactionId=" +
+        "b".repeat(64),
+    ).allowed,
+  ).toBe(false);
+});
 function call(
   guardrail: ReturnType<typeof createResearchTool>["guardrail"],
   query: string,

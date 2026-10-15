@@ -33,6 +33,8 @@ export function publicUrl(value: string): string | null {
     }
     if (isIP(host) === 6) return null; // No IP-literal IPv6 URLs in the public-page pilot.
     for (const name of url.searchParams.keys()) {
+      if (url.pathname === "/connect/google/complete" && name === "reference")
+        return null;
       if (
         /^(?:token|key|secret|password|signature|sig|auth|access_token|api_key|session|email|phone|jwt|code|x-amz-[^=]+)$/i.test(
           name,

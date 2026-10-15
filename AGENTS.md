@@ -148,3 +148,9 @@ Documentation must reflect the actual implementation.
 - Pin compatible maintained dependencies, inspect native/platform constraints and avoid packages without a demonstrated need.
 - Verify meaningful behavior through type checks, lint, ownership/concurrency tests and end-to-end flows. Native lifecycle, signing and live push checks must be reported separately from mocks. Never mark unverified work complete.
 - Keep modules small, accessible UI responsive, payloads/storage bounded, caches account-scoped and documentation aligned with actual code. Preserve working Web/Telegram behavior.
+
+## Connected capabilities (M9)
+
+- Google authorization is separate from Sahaay sign-in. OAuth state and credentials belong to the authenticated canonical user; use official SDK exchanges, actual granted scopes, server-only encrypted credentials and verified HTTPS native completion links.
+- External writes use the shared ActionApprovals service: immutable encrypted proposals, exact authenticated UI confirmation, expiry and ownership/revision revalidation. No model-executable confirmation tool. An uncertain external send must not be replayed.
+- Google email/event content is private untrusted evidence. No automatic memories, bulk import, content analytics or public-search disclosure. Real OAuth/native lifecycle and Google verification are release gates separate from mocks.

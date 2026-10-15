@@ -5,6 +5,21 @@ export async function suppressDeletedData(pool: Pool, entries: Evidence[]) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    if (
+      (
+        await client.query(
+          "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='google_connections'",
+        )
+      ).rowCount
+    ) {
+      // A restored token/approval must never resurrect disconnected access or
+      // repeat an external action. Every Google account needs fresh consent.
+      await client.query("DELETE FROM google_oauth_transactions");
+      await client.query("DELETE FROM google_oauth_completions");
+      await client.query("DELETE FROM action_approvals");
+      await client.query("DELETE FROM google_credentials");
+      await client.query("DELETE FROM google_connections");
+    }
     const hasFollowups = Boolean(
       (
         await client.query(

@@ -59,6 +59,18 @@ export async function recordEvent(
 }
 
 export type Behavior =
+  | "google_connection_started"
+  | "google_connection_completed"
+  | "google_connection_failed"
+  | "google_connection_disconnected"
+  | "google_reauthorization_required"
+  | "gmail_search_executed"
+  | "gmail_draft_created"
+  | "gmail_message_sent"
+  | "calendar_events_read"
+  | "calendar_event_created"
+  | "calendar_event_updated"
+  | "calendar_event_deleted"
   | "mobile_app_opened"
   | "mobile_login_completed"
   | "mobile_chat_started"

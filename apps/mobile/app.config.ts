@@ -12,6 +12,9 @@ const config: ExpoConfig = {
     bundleIdentifier: "com.sahaay.app",
     appleTeamId: process.env.APPLE_TEAM_ID,
     supportsTablet: true,
+    associatedDomains: process.env.EXPO_PUBLIC_GOOGLE_LINK_HOST
+      ? [`applinks:${process.env.EXPO_PUBLIC_GOOGLE_LINK_HOST}`]
+      : [],
     entitlements: {
       "com.apple.security.application-groups": ["group.com.sahaay.app"],
     },
@@ -20,6 +23,22 @@ const config: ExpoConfig = {
     package: "com.sahaay.app",
     allowBackup: false,
     intentFilters: [
+      ...(process.env.EXPO_PUBLIC_GOOGLE_LINK_HOST
+        ? [
+            {
+              action: "VIEW",
+              autoVerify: true,
+              category: ["BROWSABLE", "DEFAULT"],
+              data: [
+                {
+                  scheme: "https",
+                  host: process.env.EXPO_PUBLIC_GOOGLE_LINK_HOST,
+                  pathPrefix: "/connect/google/complete",
+                },
+              ],
+            },
+          ]
+        : []),
       {
         action: "SEND",
         category: ["DEFAULT"],

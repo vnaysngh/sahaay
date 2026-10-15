@@ -11,6 +11,29 @@ export default function Privacy() {
         </p>
         <ul>
           <li>
+            Google connections are optional and separate from your Sahaay login.
+            With your permission, Sahaay fetches relevant Gmail messages and
+            Calendar events when you ask. Selected message text, headers,
+            attachment metadata and event details may be sent to OpenAI to
+            answer or summarize your request. We do not bulk-import your
+            mailbox, use Google data to train generalized models, sell it, or
+            automatically create personal memories from it. Private Google
+            content is excluded from general analytics and public web research.
+          </li>
+          <li>
+            Google credentials and action proposals are encrypted on our
+            backend. Drafts, sends, event changes and invitations require your
+            approval of final details. Approvals expire after ten minutes;
+            proposal contents expire within seven days. Relevant answers in chat
+            follow the existing seven-day conversation retention. Google access
+            continues until you disconnect or revoke it. Disconnect deletes the
+            connected Google account’s name, email, identifier, permissions,
+            Sahaay credentials and pending actions; existing Gmail drafts,
+            emails and Calendar events remain in Google. If Google revocation
+            cannot be confirmed, remove Sahaay under your Google account’s
+            third-party access settings too.
+          </li>
+          <li>
             If you connect Telegram, Telegram also processes and retains its own
             messages/media. Account linking uses a private, expiring single-use
             link. Disconnecting stops Telegram access; deleting Sahaay data does
@@ -82,7 +105,8 @@ export default function Privacy() {
           stored original, extraction and related links; independent
           Telegram/provider copies and backups have separate retention.
           PDF/audio/video Documents, shared location, background tracking and
-          external actions aren’t supported in this release.
+          unrelated external actions aren’t supported. Google capabilities
+          depend on granted permissions and completed server/OAuth setup.
         </p>
         <Link href="/">Back to Sahaay</Link>
       </article>

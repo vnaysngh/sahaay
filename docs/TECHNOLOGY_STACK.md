@@ -1,4 +1,8 @@
 # Sahaay MVP Technology Stack
+
+## M9 current stack amendment — 2026-10-13
+
+Gmail/Calendar reuse Next.js, PostgreSQL, Better Auth and the existing OpenAI agent. Official `googleapis` 185.0.0 and `google-auth-library` 11.3.0 provide typed APIs/OAuth; `mailparser` 3.9.38 with types 3.9.0 handles MIME/plain-text extraction; existing Nodemailer builds outgoing MIME. `@js-temporal/polyfill` 0.5.1 validates IANA/local date/time and DST ambiguity. These are pinned backend dependencies, not included in the native client. Shared Zod contracts in the existing api-client package validate connection/approval transport. Native OAuth uses the already-installed Expo WebBrowser and Router with HTTPS link associations. No generic connector SDK, sync engine, new datastore or separate agent.
 **Authority:** User technical direction, amended by the Web Chat channel pivot on 2026-10-04. This supersedes WhatsApp-primary/settings-only assumptions and the former M0–M6 order.
 
 **Naming clarification:** The approved capability is **Organize**. Any “Track” wording below means explicit user-managed records only; background tracking remains deferred.

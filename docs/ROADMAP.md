@@ -1,6 +1,6 @@
 # Sahaay MVP Roadmap
 
-**Updated:** 2026-10-09. M0–M7 and M6.5 have implemented services and verification recorded in IMPLEMENTATION_PLAN.md. M8 Mobile is the current build; native release gates remain pending.
+**Updated:** 2026-10-13. M0–M7 and M6.5 have implemented services and recorded verification. M9 Google Workspace is the current authorized build; M8 native release gates and M9 live Google/device verification remain pending. See IMPLEMENTATION_PLAN.md for actual evidence.
 
 ## NEEDED FOR MVP
 
@@ -25,7 +25,7 @@ Choose later investments from repeated real usage and coarse unsupported-action 
 - **M7 — Inbox + Controlled Follow-ups:** Implemented; explicit one-off reminders, deterministic timing, small Web Inbox, Telegram notifications and normalized capability-gap events. No autonomous monitoring.
 - **Dogfood:** Founder and small tester group; observe continuity, return usage and repeated unsupported actions.
 - **M8 — Sahaay Mobile:** Native primary consumer app; reuse shared identity/core, cloud Documents, native sharing and existing follow-ups. First external capability selection remains deferred until product evidence.
-- **M9 — First Consequential Action:** Deferred; explicit policy/confirmation before execution.
+- **M9 — Google Workspace:** Current authorized build: Gmail/Calendar, shared Web/mobile account authorization and explicit approvals. Internal verification and live Google/native/verification gates are tracked separately; not production-ready yet.
 - **M10 — First Autopilot:** Deferred; only after repeated valuable workflows emerge.
 
 M7 does not authorize M8–M10, additional integrations or generalized workflow infrastructure. See the M7 implementation plan for delivery/hosting limits and verification.

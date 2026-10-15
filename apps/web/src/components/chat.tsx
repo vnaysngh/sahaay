@@ -1,4 +1,5 @@
 "use client";
+import { ChatApprovals } from "./chat-approvals";
 import { LogoMark } from "./logo";
 // import { PrivacyControls } from "./privacy-controls";
 import { useRouter } from "next/navigation";
@@ -387,82 +388,109 @@ export function Chat({ name }: { name: string }) {
           ) : (
             <section className="message-list" aria-label="Messages">
               {loading && <p className="muted">Opening your conversation…</p>}
-              {messages.map((message) => (
-                <article className={`message ${message.role}`} key={message.id}>
-                  {message.role === "assistant" && (
-                    <span className="assistant-mark">
-                      <LogoMark />
-                    </span>
-                  )}
-                  <div className="message-content">
-                    {message.artifacts?.map((a) => (
-                      <div className="message-artifact" key={a.id}>
-                        <a href={`/api/documents/${a.id}/original?download=1`}>
-                          <img
-                            src={`/api/documents/${a.id}/original`}
-                            alt={a.title}
-                            loading="lazy"
-                            style={{
-                              maxWidth: 280,
-                              maxHeight: 240,
-                              objectFit: "contain",
-                            }}
-                          />
-                          <span>{a.title} · Download original</span>
-                        </a>
+              <ChatApprovals
+                turns={messages
+                  .filter((m) => m.role === "assistant")
+                  .map((m) => m.requestId)}
+                key={selected ?? "new"}
+                conversationId={selected ?? ""}
+                revision={messages.map((m) => m.id + m.status).join(",")}
+              >
+                {(renderAction) =>
+                  messages.map((message) => (
+                    <article
+                      className={`message ${message.role}`}
+                      key={message.id}
+                    >
+                      {message.role === "assistant" && (
+                        <span className="assistant-mark">
+                          <LogoMark />
+                        </span>
+                      )}
+                      <div className="message-content">
+                        {message.role === "assistant" &&
+                        renderAction(message.requestId) ? (
+                          renderAction(message.requestId)
+                        ) : (
+                          <>
+                            {message.artifacts?.map((a) => (
+                              <div className="message-artifact" key={a.id}>
+                                <a
+                                  href={`/api/documents/${a.id}/original?download=1`}
+                                >
+                                  <img
+                                    src={`/api/documents/${a.id}/original`}
+                                    alt={a.title}
+                                    loading="lazy"
+                                    style={{
+                                      maxWidth: 280,
+                                      maxHeight: 240,
+                                      objectFit: "contain",
+                                    }}
+                                  />
+                                  <span>{a.title} · Download original</span>
+                                </a>
+                              </div>
+                            ))}
+                            {Boolean(message.attachments?.length) && (
+                              <div className="message-attachments">
+                                {message.attachments?.map((attachment) => (
+                                  <AttachmentPreview
+                                    key={attachment.id}
+                                    attachment={attachment}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {message.role === "assistant" ? (
+                              <>
+                                <Markdown
+                                  components={{
+                                    img: ({ alt }) => (
+                                      <span>
+                                        {alt
+                                          ? `Image: ${alt}`
+                                          : "Image link omitted"}
+                                      </span>
+                                    ),
+                                    a: ({ children, ...props }) => (
+                                      <a
+                                        {...props}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {children}
+                                      </a>
+                                    ),
+                                  }}
+                                >
+                                  {message.content}
+                                </Markdown>
+                                {message.sources?.length ? (
+                                  <ResearchSources sources={message.sources} />
+                                ) : null}
+                              </>
+                            ) : (
+                              <p>{message.content}</p>
+                            )}
+                            {["failed", "interrupted"].includes(
+                              message.status,
+                            ) && (
+                              <small className="message-failed">
+                                Response{" "}
+                                {message.status === "interrupted"
+                                  ? "interrupted"
+                                  : "couldn’t finish"}
+                                . Send again to retry.
+                              </small>
+                            )}
+                          </>
+                        )}
                       </div>
-                    ))}
-                    {Boolean(message.attachments?.length) && (
-                      <div className="message-attachments">
-                        {message.attachments?.map((attachment) => (
-                          <AttachmentPreview
-                            key={attachment.id}
-                            attachment={attachment}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {message.role === "assistant" ? (
-                      <>
-                        <Markdown
-                          components={{
-                            img: ({ alt }) => (
-                              <span>
-                                {alt ? `Image: ${alt}` : "Image link omitted"}
-                              </span>
-                            ),
-                            a: ({ children, ...props }) => (
-                              <a
-                                {...props}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {children}
-                              </a>
-                            ),
-                          }}
-                        >
-                          {message.content}
-                        </Markdown>
-                        {message.sources?.length ? (
-                          <ResearchSources sources={message.sources} />
-                        ) : null}
-                      </>
-                    ) : (
-                      <p>{message.content}</p>
-                    )}
-                    {["failed", "interrupted"].includes(message.status) && (
-                      <small className="message-failed">
-                        Response{" "}
-                        {message.status === "interrupted"
-                          ? "interrupted"
-                          : "couldn’t finish"}
-                        . Send again to retry.
-                      </small>
-                    )}
-                  </div>
-                </article>
-              ))}
+                    </article>
+                  ))
+                }
+              </ChatApprovals>
               {draft && (
                 <article className="message assistant streaming">
                   <span className="assistant-mark">

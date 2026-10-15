@@ -22,6 +22,29 @@ export type StoredMessage = {
 export class PostgresConversations implements ConversationStore {
   constructor(private pool: Pool) {}
   async cleanup() {
+    if (
+      (
+        await this.pool.query(
+          "SELECT to_regclass('google_oauth_transactions') AS available",
+        )
+      ).rows[0].available
+    ) {
+      await this.pool.query(
+        "DELETE FROM google_oauth_transactions WHERE expires_at<now()",
+      );
+      await this.pool.query(
+        "DELETE FROM google_oauth_completions WHERE expires_at<now()",
+      );
+      await this.pool.query(
+        "UPDATE action_approvals SET status='cancelled' WHERE status='pending' AND expires_at<now()",
+      );
+      await this.pool.query(
+        "UPDATE action_approvals SET status='unknown' WHERE status='executing' AND executed_at<now()-interval '2 minutes'",
+      );
+      await this.pool.query(
+        "DELETE FROM action_approvals WHERE created_at<now()-interval '7 days' AND status!='executing'",
+      );
+    }
     await this.pool.query(
       "DELETE FROM telegram_link_codes WHERE expires_at<now()",
     );

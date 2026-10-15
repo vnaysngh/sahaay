@@ -1,3 +1,4 @@
+import { ChatApprovals } from "../../src/chat-approvals";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { History, Plus, X } from "lucide-react-native";
 import { MessageContent } from "../../src/message";
@@ -401,48 +402,64 @@ export default function Chat() {
             scroll.current?.scrollToEnd({ animated: true })
           }
         >
-          {messages.map((m) => (
-            <Card key={m.id}>
-              <Label muted>{m.role === "user" ? "You" : "Sahaay"}</Label>
-              <MessageContent text={m.content} />
-              {m.attachments?.map((a) => (
-                <Label muted key={a.id}>
-                  {a.filename}
-                  {a.available ? "" : " (expired)"}
-                </Label>
-              ))}
-              {m.artifacts?.map((a) => (
-                <Button
-                  key={a.id}
-                  secondary
-                  title={a.title}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/document/[id]",
-                      params: { id: a.id },
-                    })
-                  }
-                />
-              ))}
-              {m.sources?.map((s) => (
-                <Button
-                  key={s.id}
-                  secondary
-                  title={s.title}
-                  onPress={() => {
-                    if (/^https?:\/\//.test(s.url)) void Linking.openURL(s.url);
-                  }}
-                />
-              ))}
-              {m.status === "running" ? (
-                <Button
-                  title="Check for the completed response"
-                  secondary
-                  onPress={() => void load(conversationId)}
-                />
-              ) : null}
-            </Card>
-          ))}
+          <ChatApprovals
+            key={conversationId}
+            conversationId={conversationId}
+            revision={messages.map((m) => m.id + m.status).join(",")}
+            turns={messages
+              .filter((m) => m.role === "assistant")
+              .map((m) => m.requestId)}
+          >
+            {(renderAction) =>
+              messages.map((m) => (
+                <Card key={m.id}>
+                  <Label muted>{m.role === "user" ? "You" : "Sahaay"}</Label>
+                  {m.role === "assistant" && renderAction(m.requestId) ? (
+                    renderAction(m.requestId)
+                  ) : (
+                    <MessageContent text={m.content} />
+                  )}
+                  {m.attachments?.map((a) => (
+                    <Label muted key={a.id}>
+                      {a.filename}
+                      {a.available ? "" : " (expired)"}
+                    </Label>
+                  ))}
+                  {m.artifacts?.map((a) => (
+                    <Button
+                      key={a.id}
+                      secondary
+                      title={a.title}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/document/[id]",
+                          params: { id: a.id },
+                        })
+                      }
+                    />
+                  ))}
+                  {m.sources?.map((s) => (
+                    <Button
+                      key={s.id}
+                      secondary
+                      title={s.title}
+                      onPress={() => {
+                        if (/^https?:\/\//.test(s.url))
+                          void Linking.openURL(s.url);
+                      }}
+                    />
+                  ))}
+                  {m.status === "running" ? (
+                    <Button
+                      title="Check for the completed response"
+                      secondary
+                      onPress={() => void load(conversationId)}
+                    />
+                  ) : null}
+                </Card>
+              ))
+            }
+          </ChatApprovals>
           {draft ? (
             <Card>
               <MessageContent text={draft} />

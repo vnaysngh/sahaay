@@ -53,6 +53,7 @@ export async function connection(uri: string) {
   return {
     root,
     env: {
+      NODE_ENV: process.env.NODE_ENV ?? "development",
       PATH: process.env.PATH,
       PGHOST: url.hostname,
       PGPORT: url.port || "5432",

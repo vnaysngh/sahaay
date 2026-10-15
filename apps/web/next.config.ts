@@ -11,6 +11,7 @@ process.env.SAHAAY_DELETION_LEDGER_DIR ??= resolve(
 const configNext: NextConfig = {
   distDir: process.env.SAHAAY_E2E === "1" ? ".next-test" : ".next",
   poweredByHeader: false,
+  logging: { incomingRequests: { ignore: [/\/api\/connections\/google\/callback/, /\/connect\/google\/complete/] } },
   async headers() {
     return [
       {
@@ -25,6 +26,7 @@ const configNext: NextConfig = {
           },
         ],
       },
+      { source: "/connect/google/complete", headers: [{ key: "Referrer-Policy", value: "no-referrer" }, { key: "Cache-Control", value: "no-store" }] },
     ];
   },
 };

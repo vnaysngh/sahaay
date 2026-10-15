@@ -10,6 +10,7 @@ const links = [
   ["/inbox", "Inbox"],
   ["/", "Talk to Sahaay"],
   ["/connect/telegram", "Connect Telegram"],
+  ["/settings/connected", "Settings"],
 ] as const;
 export function AppHeader() {
   const pathname = usePathname();

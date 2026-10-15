@@ -19,6 +19,8 @@ import { followupInput, resolveLocalTime } from "../core/followups";
 import { RequestError } from "../core/validation";
 import type { ArtifactService } from "../core/artifacts";
 export type RecordServices = {
+  google?: import("../google/connections").GoogleConnections;
+  approvals?: import("../core/approvals").ActionApprovals;
   accountProfile?: { displayName: string | null };
   artifacts?: ArtifactService;
   followups?: FollowupService;

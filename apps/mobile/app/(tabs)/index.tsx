@@ -97,6 +97,7 @@ export default function Home() {
         phone’s share sheet.
       </Label>
       <View style={{ gap: 10 }}>
+        <Button secondary title="Connected Accounts" onPress={() => router.push("/connected-accounts")} />
         <Button
           secondary
           title={`Appearance: ${mode}`}

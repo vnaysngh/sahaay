@@ -1,5 +1,15 @@
 # Sahaay Architecture Decisions — Pivot Register
 
+## ADR-031 — Google Workspace authorization and actions (M9, 2026-10-13)
+
+Accepted user scope: Gmail/Calendar only, through the existing Next.js core and Web/React Native clients. Supersedes Google/external-action deferrals in earlier MVP entries. Better Auth sign-in is preserved; Google subject identifies connected accounts within canonical ownership. Choose official Google Node API/Auth clients over custom OAuth or a connector platform; Mailparser/Nodemailer over hand-written MIME, Temporal over offset arithmetic. No mailbox sync, Redis, microservice, generic marketplace or second agent.
+
+Reuse the existing AES-256-GCM envelope/key with distinct authenticated purposes for credentials, PKCE and action proposals; independent recovery of the existing artifact key remains essential. Prefer one PostgreSQL connection row lock for on-demand refresh rather than a token-refresh cron. API clients omit refresh tokens after the server refreshes, so SDK authorization replay cannot duplicate writes. Actual scopes are authoritative; calendar list/freebusy need narrow additional scopes beyond events.readonly. Gmail compose includes send permission at Google, but sending still requires separate application approval.
+
+There is no existing durable external approval service to reuse. Extend user-control policy with one shared immutable ActionApprovals boundary, used for drafts as well as consequential sends/event writes. Agent proposals never execute; the user approves exact final details in Web/mobile. This adds friction for low-impact drafts but prevents email prompt injection from authorizing persistence. Unknown sends are not retried; users inspect Google directly. Full series and occurrence are supported with explicit target/scope; this-and-following is deferred because correctly splitting a recurrence needs a separate reviewed design.
+
+Mobile uses backend-owned HTTPS callbacks plus verified app/universal links and Expo's native authorization browser. Installed Expo SDK 57's iOS implementation supports HTTPS ASWebAuthenticationSession callbacks on iOS 17.4+; earlier iOS uses browser-close/foreground refresh. No insecure custom URI credential handoff. App-link/signing/lifecycle checks and real Google OAuth are release-blocking; mocks prove neither. Google restricted-scope verification/security assessment is a separate external gate.
+
 **Revision:** 0.4, 2026-10-04 (Asia/Kolkata)  
 **Status:** MVP scope frozen. User stack direction incorporated on 2026-10-04; M0 live screening recorded; readiness checks remain open. M1 has not started.
 
@@ -105,3 +115,6 @@ iOS startup uses Expo's `ExpoAppSceneDelegate` and `ExpoReactNativeFactoryProvid
 ## ADR-030 — Native capture, cloud Documents and controlled push
 
 Accepted design: native iOS ShareViewController with protected drafts plus Android intents, rather than experimental forced-extension-to-app handoff. A small native module is limited to capture/security/lifecycle. Documents reuse existing cloud storage; explicit intent remains necessary. Expo notifications deliver existing M7 follow-ups with per-device durable attempts; no second scheduler. Real cold/warm/signed-out share and push tests remain release gates. Local builds use provisional com.sahaay.app until the owner configures signing/project credentials.
+# Google disconnect retention clarification — 2026-10-14
+
+Explicit Google disconnect removes the connection profile as well as encrypted credentials and action proposals. Retaining a name/email/subject solely to advertise reconnection is unnecessary. Reconnection is reserved for restoring an existing connection whose access expired or was revoked; a verified Google subject check enforces the same account and Google's login hint improves the consent experience. New account connection remains a separate action. Previously retained disconnected profiles are purged by migration0014. Restoring backups clears Google profiles and grants rather than bringing back removed connections. Existing independent conversation, backup and content-free analytics retention remains unchanged.

@@ -1011,3 +1011,204 @@ test("mobile origin uses the same authenticated account and rejects unowned stat
     401,
   );
 });
+
+test("Google settings are authenticated, responsive and safely unconfigured", async ({
+  page,
+}) => {
+  await page.goto("/settings/connected");
+  await expect(
+    page.getByRole("heading", { name: "Welcome back." }),
+  ).toBeVisible();
+  await signup(page);
+  await page.goto("/settings/connected");
+  await expect(
+    page.getByRole("heading", { name: "Connected Accounts", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Google connections need server configuration before you can connect.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect Google account", exact: true })).toBeDisabled();
+  await expect(page.getByText("No current actions to review.")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("Google APIs require sessions and origin-protected exact approval decisions", async ({
+  page,
+}) => {
+  expect((await page.request.get("/api/connections/google")).status()).toBe(
+    401,
+  );
+  expect((await page.request.get("/api/actions")).status()).toBe(401);
+  await signup(page);
+  const session = await page.request.get("/api/auth/get-session");
+  const owner = (await session.json()).user.id;
+  const nativeConnections = await page.request.get("/api/connections/google", {
+    headers: { Origin: "sahaay://" },
+  });
+  expect(nativeConnections.status()).toBe(200);
+  const json = await nativeConnections.json();
+  expect(json.connections).toEqual([]);
+  expect(JSON.stringify(json)).not.toContain("refresh_token");
+  expect(owner).toBeTruthy();
+  expect(
+    (
+      await page.request.post("/api/actions", {
+        headers: { Origin: "https://attacker.example" },
+        data: { id: crypto.randomUUID(), decision: "approve" },
+      })
+    ).status(),
+  ).toBe(403);
+  expect(
+    (
+      await page.request.post("/api/actions", {
+        headers: { Origin: "http://localhost:3100" },
+        data: {
+          id: crypto.randomUUID(),
+          decision: "approve",
+          message: "changed payload",
+        },
+      })
+    ).status(),
+  ).toBe(400);
+  expect(
+    (
+      await page.request.get(
+        "/api/connections/google/callback?state=invalid&code=synthetic-code",
+      )
+    ).status(),
+  ).toBe(400);
+});
+
+test("Google account management and exact approval UI handle uncertain outcomes", async ({ page }) => {
+  await signup(page);
+  const first = crypto.randomUUID(), second = crypto.randomUUID(), actionId = crypto.randomUUID();
+  let uncertain = false;
+  const accounts = [
+    { id: first, email: "personal@example.invalid", displayName: "Personal Google", status: "connected", capabilities: ["gmail_read"], scopes: [], lastSuccessfulUseAt: null },
+    { id: second, email: "work@example.invalid", displayName: "Work Google", status: "reauthorization_required", capabilities: ["calendar_read"], scopes: [], lastSuccessfulUseAt: null },
+  ];
+  let disconnectCalls = 0;
+  await page.route("**/api/connections/google", async (route) => {
+    if (route.request().method() === "DELETE") {
+      disconnectCalls++;
+      expect(route.request().postDataJSON()).toEqual({connectionId: first});
+      if (disconnectCalls === 1) return route.fulfill({status: 503, json: {error: "Synthetic disconnect failure"}});
+      accounts.splice(0, 1);
+      return route.fulfill({json: {ok: true, revocationConfirmed: false}});
+    }
+    return route.fulfill({ json: { configured: true, mobileLinksConfigured: false, connections: accounts } });
+  });
+  await page.route("**/api/actions", async (route) => {
+    if (route.request().method() === "POST") {
+      expect(route.request().postDataJSON()).toEqual({ id: actionId, decision: "approve" });
+      uncertain = true; await route.fulfill({ status: 503, json: { error: "Google’s outcome is uncertain. Check Google directly.", code: "google_unavailable" } });
+    } else await route.fulfill({ json: [{ id: actionId, status: uncertain ? "unknown" : "pending", expiresAt: new Date(Date.now() + 600000).toISOString(), accountEmail: accounts[0].email, preview: null, proposal: { kind: "gmail_send", connectionId: first, message: { to: ["recipient@example.invalid"], cc: [], subject: "Reviewed reply", body: "Please confirm my synthetic hotel reservation.", replyMessageId: null } }, result: uncertain ? { outcome: "outcome_unknown_check_google_do_not_retry" } : null }] });
+  });
+  await page.goto("/settings/connected");
+  await expect(page.getByRole("heading", { name: "Personal Google" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Work Google" })).toBeVisible();
+  const personal = page.locator("section.connection-card").filter({ has: page.getByRole("heading", { name: "Personal Google" }) });
+  await expect(page.getByRole("button", { name: "Connect Gmail", exact: true })).toHaveCount(0);
+  await expect(personal.getByText("Connected · Read access", { exact: true })).toBeVisible();
+  await expect(personal.getByText("Not connected · Permission needed", { exact: true })).toBeVisible();
+  await expect(personal.getByRole("button", { name: "Reconnect Google account" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reconnect Google account" })).toHaveCount(1);
+  await expect(personal.getByText("Read Gmail: ", {exact: false})).toBeVisible();
+  await expect(personal.getByRole("button", { name: "Review permissions in Google" })).toBeVisible();
+  let permissionRequest: unknown;
+  await page.route("**/api/connections/google/authorize", async (route) => {
+    permissionRequest = route.request().postDataJSON();
+    await route.fulfill({ status: 503, json: {error: "Synthetic consent redirect paused"} });
+  });
+  await personal.getByRole("button", { name: "Review permissions in Google" }).click();
+  await expect(page.getByText("Synthetic consent redirect paused")).toBeVisible();
+  expect(permissionRequest).toEqual({connectionId: first, platform: "web", capabilities: ["gmail_read", "gmail_compose", "gmail_send", "calendar_read", "calendar_write"]});
+  await expect(page.getByText("Please confirm my synthetic hotel reservation.", { exact: true })).toBeVisible();
+  await expect(page.getByText("recipient@example.invalid", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Approve this exact action" }).click();
+  await expect(page.getByText("Google’s outcome is uncertain. Check Gmail or Calendar directly before doing anything again.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve this exact action" })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "/private/tmp/sahaay-google-settings-mobile.png", fullPage: true });
+  const trigger = personal.getByRole("button", {name: "Disconnect", exact: true});
+  await trigger.click();
+  const dialog = page.getByRole("alertdialog", {name: "Disconnect Google account?"});
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("personal@example.invalid", {exact: true})).toBeVisible();
+  await expect(dialog.getByRole("button", {name: "Cancel"})).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.getByRole("button", {name: "Disconnect", exact: true})).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", {name: "Cancel"})).toBeFocused();
+  await page.screenshot({path: "/private/tmp/sahaay-disconnect-mobile.png"});
+  await dialog.getByRole("button", {name: "Cancel"}).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  expect(disconnectCalls).toBe(0);
+  await trigger.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  expect(disconnectCalls).toBe(0);
+  await trigger.click();
+  await page.setViewportSize({width: 1280, height: 900});
+  await page.screenshot({path: "/private/tmp/sahaay-disconnect-desktop.png"});
+  await page.evaluate(() => document.documentElement.dataset.theme = "dark");
+  await page.screenshot({path: "/private/tmp/sahaay-disconnect-dark.png"});
+  await dialog.getByRole("button", {name: "Disconnect", exact: true}).click();
+  await expect(dialog.getByRole("alert")).toHaveText("Synthetic disconnect failure");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", {name: "Disconnect", exact: true}).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator(".connection-notice")).toContainText("Google revocation could not be confirmed");
+  await expect(page.getByRole("heading", {name: "Personal Google"})).toHaveCount(0);
+  expect(disconnectCalls).toBe(2);
+
+});
+
+test("Google chat approval reviews exact content and updates the receipt inline", async ({page}) => {
+  await signup(page);
+  const actionId = crypto.randomUUID(), connectionId = crypto.randomUUID();
+  let approved = false, decisions = 0, turnId = "";
+  page.on("request", (request) => {if(new URL(request.url()).pathname === "/api/chat" && request.method() === "POST") turnId = request.postDataJSON().requestId;});
+  await page.route("**/api/actions*", async (route) => {
+    if (route.request().method() === "POST") {
+      decisions++;
+      expect(route.request().postDataJSON()).toEqual({id: actionId, decision: "approve"});
+      approved = true;
+      return route.fulfill({json: {status: "succeeded"}});
+    }
+    expect(new URL(route.request().url()).searchParams.get("conversationId")).toMatch(/^[a-f0-9-]{36}$/);
+    const receipt = {requestId: turnId, requestIds: [turnId], id: actionId, accountEmail: "sender@example.invalid", status: approved ? "succeeded" : "pending", expiresAt: new Date(Date.now()+600000).toISOString(), preview: null, result: null, proposal: {kind: "gmail_send", connectionId, message: {to: ["recipient@example.invalid"], cc: [], subject: "Reviewed inline", body: "Synthetic email for review", replyMessageId: null}}};
+    return route.fulfill({json: [receipt, {...receipt, id: "00000000-0000-4000-8000-000000000123", requestId: "00000000-0000-4000-8000-000000000124", requestIds: [], status: "cancelled"}]});
+  });
+  await page.getByRole("textbox", {name: "Message Sahaay"}).fill("Hello");
+  await page.getByRole("button", {name: "Send message", exact: true}).click();
+  const panel = page.getByRole("region", {name: "Actions in this conversation"});
+  const activeCard = panel.locator("article.chat-action-card");
+  await expect(activeCard.getByText("Synthetic email for review", {exact: true})).toBeVisible();
+  await expect(activeCard.getByText("recipient@example.invalid", {exact: true})).toBeVisible();
+  await expect(activeCard.getByText("From account: sender@example.invalid")).toBeVisible();
+  await expect(activeCard).toHaveCount(1);
+  await expect(page.getByText("Hello! Let’s think this through together.", {exact: true})).toHaveCount(0);
+  await expect(panel.getByText("Cancelled")).toHaveCount(0);
+  await page.setViewportSize({width: 390, height: 844});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({width: 1280, height: 1000});
+  await activeCard.screenshot({path: "/private/tmp/sahaay-chat-action-card.png"});
+  await page.screenshot({path: "/private/tmp/sahaay-chat-approval.png", fullPage: true});
+  await panel.getByRole("button", {name: "Approve send email"}).click();
+  await expect(panel.getByText("Send email · Completed")).toBeVisible();
+  await expect(activeCard).toHaveCount(0);
+  await panel.getByText("View sent details", {exact: true}).click();
+  await expect(panel.locator("details[open]").getByText("Synthetic email for review", {exact: true})).toBeVisible();
+  await expect(panel.getByRole("button", {name: "Approve send email"})).toHaveCount(0);
+  expect(decisions).toBe(1);
+});
